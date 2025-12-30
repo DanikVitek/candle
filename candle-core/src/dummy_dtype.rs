@@ -5,6 +5,9 @@
 
 use crate::{DType, Error, Result, WithDType};
 
+#[cfg(feature = "iex")]
+use iex::iex;
+
 /// 6-bit float with 2 exponent bits and 3 mantissa bits (MX6 format)
 /// This is a dummy type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -66,10 +69,12 @@ macro_rules! dummy_with_dtype {
                 )
             }
 
+            #[cfg_attr(feature = "iex", iex)]
             fn cpu_storage_data(_s: crate::CpuStorage) -> Result<Vec<Self>> {
                 Err(Error::UnsupportedDTypeForOp(DType::$dtype, "cpu_storage_data").bt())
             }
 
+            #[cfg_attr(feature = "iex", iex)]
             fn cpu_storage_as_slice(_s: &crate::CpuStorage) -> Result<&[Self]> {
                 Err(Error::UnsupportedDTypeForOp(DType::$dtype, "cpu_storage_as_slice").bt())
             }

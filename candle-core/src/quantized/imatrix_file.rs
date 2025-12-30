@@ -7,6 +7,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 
 use crate::Result;
 
+#[cfg_attr(feature = "iex", iex::iex)]
 pub fn load_imatrix<P: AsRef<Path>>(fname: P) -> Result<HashMap<String, Vec<f32>>> {
     let mut all_data = HashMap::new();
 

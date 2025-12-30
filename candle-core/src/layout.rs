@@ -37,6 +37,7 @@ impl Layout {
     }
 
     /// The dimension size for a specified dimension index.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn dim<D: crate::shape::Dim>(&self, dim: D) -> Result<usize> {
         let dim = dim.to_index(&self.shape, "dim")?;
         Ok(self.dims()[dim])
@@ -77,6 +78,7 @@ impl Layout {
         self.shape.is_fortran_contiguous(&self.stride)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn narrow(&self, dim: usize, start: usize, len: usize) -> Result<Self> {
         let dims = self.shape().dims();
         if dim >= dims.len() {
@@ -106,6 +108,7 @@ impl Layout {
         })
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn transpose(&self, dim1: usize, dim2: usize) -> Result<Self> {
         let rank = self.shape.rank();
         if rank <= dim1 || rank <= dim2 {
@@ -127,6 +130,7 @@ impl Layout {
         })
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn permute(&self, idxs: &[usize]) -> Result<Self> {
         let is_permutation =
             idxs.len() == self.shape.rank() && (0..idxs.len()).all(|i| idxs.contains(&i));
@@ -152,6 +156,7 @@ impl Layout {
         })
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn broadcast_as<S: Into<Shape>>(&self, shape: S) -> Result<Self> {
         let shape = shape.into();
         if shape.rank() < self.shape().rank() {

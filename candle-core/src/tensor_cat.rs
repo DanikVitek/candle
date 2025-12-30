@@ -1,5 +1,8 @@
 use crate::{shape::Dim, Context, Error, Result, Shape, Tensor};
 
+#[cfg(feature = "iex")]
+use iex::iex;
+
 impl Tensor {
     /// Concatenates two or more tensors along a particular dimension.
     ///
@@ -18,6 +21,7 @@ impl Tensor {
     /// assert_eq!(c.shape().dims(), &[2, 6]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn cat<A: AsRef<Tensor>, D: Dim>(args: &[A], dim: D) -> Result<Self> {
         if args.is_empty() {
             Err(Error::OpRequiresAtLeastOneTensor { op: "cat" }.bt())?
@@ -242,7 +246,7 @@ impl Tensor {
     /// has to be greater than or equal to `offset` plus the `src` size.
     ///
     /// Note that this modifies `self` in place and as such is not compatible with
-    /// back-propagation.  
+    /// back-propagation.
     pub fn slice_set<D: Dim>(&self, src: &Self, dim: D, offset: usize) -> Result<()> {
         let dim = dim.to_index(self.shape(), "slice-set")?;
         if !self.is_contiguous() || !src.is_contiguous() {

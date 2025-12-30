@@ -11,14 +11,18 @@ pub(crate) mod unary;
 pub(crate) mod where_cond;
 
 use candle_core::{Device, Result};
+#[cfg(feature = "iex")]
+use iex::iex;
 
 pub(crate) trait BenchDevice {
+    #[cfg_attr(feature = "iex", iex)]
     fn sync(&self) -> Result<()>;
 
     fn bench_name<S: Into<String>>(&self, name: S) -> String;
 }
 
 impl BenchDevice for Device {
+    #[cfg_attr(feature = "iex", iex)]
     fn sync(&self) -> Result<()> {
         match self {
             Device::Cpu => Ok(()),
@@ -63,6 +67,7 @@ struct BenchDeviceHandler {
 }
 
 impl BenchDeviceHandler {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn new() -> Result<Self> {
         let mut devices = Vec::new();
         if cfg!(feature = "metal") {

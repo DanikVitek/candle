@@ -1,4 +1,7 @@
 use crate::{Result, Tensor};
+
+#[cfg(feature = "iex")]
+use iex::iex;
 use rayon::prelude::*;
 
 #[derive(Debug, Clone, Copy)]
@@ -62,6 +65,7 @@ mod cuda {
     use crate::{CudaDevice, WithDType};
 
     impl crate::cuda_backend::Map1Any for ArgSort {
+        #[cfg_attr(feature = "iex", iex)]
         fn f<T: DeviceRepr + WithDType + ValidAsZeroBits, W: Fn(CudaSlice<T>) -> S>(
             &self,
             src: &CudaSlice<T>,
@@ -108,6 +112,7 @@ impl crate::CustomOp1 for ArgSort {
         "argsort"
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn cpu_fwd(
         &self,
         storage: &crate::CpuStorage,
@@ -149,6 +154,7 @@ impl crate::CustomOp1 for ArgSort {
     }
 
     #[cfg(feature = "cuda")]
+    #[cfg_attr(feature = "iex", iex)]
     fn cuda_fwd(
         &self,
         storage: &crate::CudaStorage,
@@ -166,6 +172,7 @@ impl crate::CustomOp1 for ArgSort {
     }
 
     #[cfg(feature = "metal")]
+    #[cfg_attr(feature = "iex", iex)]
     fn metal_fwd(
         &self,
         storage: &crate::MetalStorage,
@@ -257,6 +264,7 @@ impl Tensor {
     /// If `asc` is `true`, sorting is in ascending order. Otherwise sorting is performed in
     /// descending order. The sort is unstable so there is no guarantees on the final order when it
     /// comes to ties.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn arg_sort_last_dim(&self, asc: bool) -> Result<Tensor> {
         if !self.is_contiguous() {
             return Err(crate::Error::RequiresContiguous {
@@ -277,6 +285,7 @@ impl Tensor {
     /// If `asc` is `true`, sorting is in ascending order. Otherwise sorting is performed in
     /// descending order. The sort is unstable so there is no guarantees on the final order when it
     /// comes to ties.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn sort_last_dim(&self, asc: bool) -> Result<(Tensor, Tensor)> {
         if !self.is_contiguous() {
             return Err(crate::Error::RequiresContiguous {

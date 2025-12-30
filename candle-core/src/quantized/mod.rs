@@ -1,7 +1,11 @@
 use crate::{
     backend::BackendStorage, CpuStorage, DType, Device, Result, Shape, Storage, Tensor, D,
 };
+
+#[cfg(feature = "iex")]
+use iex::iex;
 use k_quants::*;
+
 use std::borrow::Cow;
 
 #[cfg(target_feature = "avx2")]
@@ -56,6 +60,7 @@ pub struct QTensor {
 }
 
 impl Device {
+    #[cfg_attr(feature = "iex", iex)]
     fn qzeros(&self, elem_count: usize, dtype: GgmlDType) -> Result<QStorage> {
         match self {
             Device::Cpu => {
@@ -81,6 +86,7 @@ pub enum QStorage {
 }
 
 impl QStorage {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn from_data(data: Cow<'_, [u8]>, device: &Device, dtype: GgmlDType) -> Result<Self> {
         match device {
             Device::Cpu => Ok(Self::Cpu(dtype.from_data(data))),
@@ -153,6 +159,7 @@ impl QStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn quantize(&mut self, src: &Storage) -> Result<()> {
         match (self, src) {
             (QStorage::Cpu(storage), Storage::Cpu(src)) => {
@@ -165,6 +172,7 @@ impl QStorage {
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn quantize_imatrix(
         &mut self,
         src: &Storage,
@@ -186,6 +194,7 @@ impl QStorage {
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn quantize_onto(&mut self, src: &Storage) -> Result<()> {
         match (self, src) {
             (QStorage::Cpu(storage), Storage::Cpu(src)) => {
@@ -198,6 +207,7 @@ impl QStorage {
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn quantize_imatrix_onto(
         &mut self,
         src: &Storage,
@@ -219,6 +229,7 @@ impl QStorage {
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn dequantize(&self, elem_count: usize) -> Result<Storage> {
         match self {
             QStorage::Cpu(storage) => Ok(Storage::Cpu(storage.dequantize(elem_count)?)),
@@ -227,6 +238,7 @@ impl QStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn data(&self) -> Result<Cow<'_, [u8]>> {
         match self {
             QStorage::Cpu(storage) => {
@@ -240,6 +252,7 @@ impl QStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn device_ptr(&self) -> Result<*const u8> {
         match self {
             QStorage::Cuda(storage) => storage.device_ptr(),
@@ -270,6 +283,7 @@ pub enum GgmlDType {
 }
 
 impl GgmlDType {
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn from_u32(u: u32) -> Result<Self> {
         let dtype = match u {
             0 => Self::F32,
@@ -396,8 +410,11 @@ impl GgmlDType {
 // A version of GgmlType without `vec_dot` so that it can be dyn boxed.
 pub trait QuantizedType: Send + Sync {
     fn dtype(&self) -> GgmlDType;
+    #[cfg_attr(feature = "iex", iex)]
     fn matmul_t(&self, mkn: (usize, usize, usize), lhs: &[f32], dst: &mut [f32]) -> Result<()>;
+    #[cfg_attr(feature = "iex", iex)]
     fn matmul_t_f16(&self, mkn: (usize, usize, usize), lhs: &[f16], dst: &mut [f16]) -> Result<()>;
+    #[cfg_attr(feature = "iex", iex)]
     fn dequantize(&self, elem_count: usize) -> Result<CpuStorage>;
     fn storage_size_in_bytes(&self) -> usize;
     fn as_ptr(&self) -> *const u8;
@@ -410,9 +427,11 @@ pub trait QuantizedType: Send + Sync {
 }
 
 impl<T: k_quants::GgmlType + Send + Sync> QuantizedType for Vec<T> {
+    #[cfg_attr(feature = "iex", iex)]
     fn matmul_t(&self, mkn: (usize, usize, usize), lhs: &[f32], dst: &mut [f32]) -> Result<()> {
         k_quants::matmul(mkn, lhs, self.as_slice(), dst)
     }
+    #[cfg_attr(feature = "iex", iex)]
     fn matmul_t_f16(&self, mkn: (usize, usize, usize), lhs: &[f16], dst: &mut [f16]) -> Result<()> {
         k_quants::matmul_f16(mkn, lhs, self.as_slice(), dst)
     }
@@ -437,6 +456,7 @@ impl<T: k_quants::GgmlType + Send + Sync> QuantizedType for Vec<T> {
         T::BLCK_SIZE
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn dequantize(&self, elem_count: usize) -> Result<CpuStorage> {
         let mut ys = vec![0.0f32; elem_count];
         T::to_float(self.as_slice(), &mut ys);
@@ -458,6 +478,7 @@ impl std::fmt::Debug for QTensor {
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn check_shape(shape: &Shape, block_size: usize) -> Result<()> {
     let dims = shape.dims();
     if dims.is_empty() {
@@ -473,12 +494,14 @@ fn check_shape(shape: &Shape, block_size: usize) -> Result<()> {
 }
 
 impl QTensor {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn new<S: Into<Shape>>(storage: QStorage, shape: S) -> Result<Self> {
         let shape = shape.into();
         check_shape(&shape, storage.block_size())?;
         Ok(Self { storage, shape })
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn quantize(src: &Tensor, dtype: GgmlDType) -> Result<Self> {
         let shape = src.shape();
         let block_size = dtype.block_size();
@@ -499,6 +522,7 @@ impl QTensor {
         })
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn quantize_imatrix(
         src: &Tensor,
         imatrix_weights: &[f32],
@@ -535,6 +559,7 @@ impl QTensor {
     }
 
     /// Quantize `src` (currently on the CPU) to a QTensor on `dev`
+    #[cfg_attr(feature = "iex", iex)]
     pub fn quantize_imatrix_onto(
         src: &Tensor,
         imatrix_weights: &[f32],
@@ -578,6 +603,7 @@ impl QTensor {
     }
 
     /// Quantize `src` (currently on the CPU) to a QTensor on `dev`
+    #[cfg_attr(feature = "iex", iex)]
     pub fn quantize_onto(src: &Tensor, dtype: GgmlDType, dev: &Device) -> Result<Self> {
         if !src.device().is_cpu() {
             crate::bail!(
@@ -621,12 +647,14 @@ impl QTensor {
         &self.shape
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn dequantize(&self, device: &Device) -> Result<Tensor> {
         let storage = self.storage.dequantize(self.shape.elem_count())?;
         let none = crate::op::BackpropOp::none();
         crate::tensor::from_storage(storage, self.shape.clone(), none, false).to_device(device)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn dequantize_f16(&self, device: &Device) -> Result<Tensor> {
         // In the CUDA case, we have a specialized kernel as this can be useful for volta
         // architectures. https://github.com/huggingface/candle/issues/2136
@@ -648,10 +676,12 @@ impl QTensor {
         self.storage.size_in_bytes()
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn data(&self) -> Result<Cow<'_, [u8]>> {
         self.storage.data()
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn indexed_moe_forward(&self, x: &Tensor, ids: &Tensor) -> Result<Tensor> {
         match &self.storage {
             QStorage::Cuda(s) => match (&*x.storage(), &*ids.storage()) {
@@ -680,6 +710,7 @@ impl QTensor {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn device_ptr(&self) -> Result<*const u8> {
         match &self.storage {
             QStorage::Cuda(storage) => storage.device_ptr(),
@@ -720,6 +751,7 @@ thread_local! {
 }
 
 impl QMatMul {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn from_arc(qtensor: std::sync::Arc<QTensor>) -> Result<Self> {
         let dequantize = match qtensor.dtype() {
             GgmlDType::F32 | GgmlDType::F16 | GgmlDType::BF16 => true,
@@ -737,10 +769,12 @@ impl QMatMul {
         Ok(t)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn from_qtensor(qtensor: QTensor) -> Result<Self> {
         Self::from_arc(std::sync::Arc::new(qtensor))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn dequantize_f16(&self) -> Result<Tensor> {
         match self {
             Self::QTensor(t) => t.dequantize_f16(&t.device()),
@@ -749,6 +783,7 @@ impl QMatMul {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn forward_via_f16(&self, xs: &Tensor) -> Result<Tensor> {
         let w = self.dequantize_f16()?;
         let in_dtype = xs.dtype();
@@ -760,6 +795,7 @@ impl QMatMul {
         xs.to_dtype(DType::F16)?.matmul(&w)?.to_dtype(in_dtype)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn indexed_moe_forward(&self, x: &Tensor, ids: &Tensor) -> Result<Tensor> {
         match self {
             Self::QTensor(t) => t.indexed_moe_forward(x, ids),
@@ -775,6 +811,7 @@ impl crate::CustomOp1 for QTensor {
         "qmatmul"
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn cpu_fwd(
         &self,
         storage: &crate::CpuStorage,
@@ -830,6 +867,7 @@ impl crate::CustomOp1 for QTensor {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn metal_fwd(
         &self,
         storage: &crate::MetalStorage,
@@ -842,6 +880,7 @@ impl crate::CustomOp1 for QTensor {
         self_storage.fwd(&self.shape, storage, layout)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn cuda_fwd(
         &self,
         storage: &crate::CudaStorage,
@@ -856,6 +895,7 @@ impl crate::CustomOp1 for QTensor {
 }
 
 impl crate::Module for QMatMul {
+    #[cfg_attr(feature = "iex", iex)]
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         match self {
             Self::QTensor(t) => xs.apply_op1_no_bwd(t.as_ref()),

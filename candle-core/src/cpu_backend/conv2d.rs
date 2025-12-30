@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 
+#[cfg(feature = "iex")]
+use iex::iex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
@@ -22,6 +24,8 @@ const DEFAULT_CONV2D_IMPL: Conv2dImpl = Conv2dImpl::TiledIm2Col;
 
 impl Map2 for Conv2D<'_> {
     const OP: &'static str = "conv2d";
+
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType + num_traits::Num + Copy + 'static>(
         &self,
         inp: &[T],
@@ -53,6 +57,7 @@ impl Map2 for Conv2D<'_> {
 
 /// Fast kernel for 1x1 convolutions with stride=1, padding=0, dilation=1
 /// These are just matrix multiplications: [c_out, c_in] @ [c_in, b*h*w] -> [c_out, b*h*w].
+#[cfg_attr(feature = "iex", iex)]
 fn conv2d_1x1<T: WithDType + num_traits::Num + Copy + 'static>(
     p: &ParamsConv2D,
     inp: &[T],
@@ -123,6 +128,7 @@ fn conv2d_1x1<T: WithDType + num_traits::Num + Copy + 'static>(
 /// General tiled convolution implementation using gemm.
 ///
 /// Similar to full im2col, but instead of materializing the full matrix, we process input/output in tiles, in parallel.
+#[cfg_attr(feature = "iex", iex)]
 fn conv2d_tiled<T: WithDType + num_traits::Num + Copy + 'static>(
     p: &ParamsConv2D,
     inp: &[T],
@@ -277,6 +283,7 @@ fn conv2d_tiled<T: WithDType + num_traits::Num + Copy + 'static>(
 }
 
 /// General direct convolution impl. Decently fast for small inputs and kernels, but loses to full/tiled gemm.
+#[cfg_attr(feature = "iex", iex)]
 fn conv2d_direct<T: WithDType + num_traits::Num + Copy + 'static>(
     p: &ParamsConv2D,
     inp: &[T],
@@ -388,6 +395,7 @@ fn alloc_uninit_vec<T: WithDType + Copy + 'static>(size: usize) -> Vec<T> {
 /// Full im2col + gemm convolution implementation.
 ///
 /// For large inputs im2col and copy_strided_src for output gets expensive.
+#[cfg_attr(feature = "iex", iex)]
 fn conv2d_im2col_gemm<T: WithDType + num_traits::Num + Copy + 'static>(
     p: &ParamsConv2D,
     inp: &[T],

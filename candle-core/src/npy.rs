@@ -26,8 +26,12 @@
 //! values = np.loadz("test.npz")
 //! ```
 use crate::{DType, Device, Error, Result, Shape, Tensor};
+
 use byteorder::{LittleEndian, ReadBytesExt};
 use half::{bf16, f16, slice::HalfFloatSliceExt};
+#[cfg(feature = "iex")]
+use iex::iex;
+
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read, Write};
@@ -36,6 +40,7 @@ use std::path::Path;
 const NPY_MAGIC_STRING: &[u8] = b"\x93NUMPY";
 const NPY_SUFFIX: &str = ".npy";
 
+#[cfg_attr(feature = "iex", iex)]
 fn read_header<R: Read>(reader: &mut R) -> Result<String> {
     let mut magic_string = vec![0u8; NPY_MAGIC_STRING.len()];
     reader.read_exact(&mut magic_string)?;
@@ -72,6 +77,7 @@ impl Header {
         Shape::from(self.shape.as_slice())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn to_string(&self) -> Result<String> {
         let fortran_order = if self.fortran_order { "True" } else { "False" };
         let mut shape = self
@@ -106,6 +112,7 @@ impl Header {
 
     // Hacky parser for the npy header, a typical example would be:
     // {'descr': '<f8', 'fortran_order': False, 'shape': (128,), }
+    #[cfg_attr(feature = "iex", iex)]
     fn parse(header: &str) -> Result<Header> {
         let header =
             header.trim_matches(|c: char| c == '{' || c == '}' || c == ',' || c.is_whitespace());
@@ -204,6 +211,7 @@ impl Header {
 
 impl Tensor {
     // TODO: Add the possibility to read directly to a device?
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn from_reader<R: std::io::Read>(
         shape: Shape,
         dtype: DType,
@@ -270,6 +278,7 @@ impl Tensor {
     }
 
     /// Reads a npy file and return the stored multi-dimensional array as a tensor.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn read_npy<T: AsRef<Path>>(path: T) -> Result<Self> {
         let mut reader = File::open(path.as_ref())?;
         let header = read_header(&mut reader)?;
@@ -281,6 +290,7 @@ impl Tensor {
     }
 
     /// Reads a npz file and returns the stored multi-dimensional arrays together with their names.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn read_npz<T: AsRef<Path>>(path: T) -> Result<Vec<(String, Self)>> {
         let zip_reader = BufReader::new(File::open(path.as_ref())?);
         let mut zip = zip::ZipArchive::new(zip_reader)?;
@@ -303,6 +313,7 @@ impl Tensor {
     }
 
     /// Reads a npz file and returns the stored multi-dimensional arrays for some specified names.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn read_npz_by_name<T: AsRef<Path>>(path: T, names: &[&str]) -> Result<Vec<Self>> {
         let zip_reader = BufReader::new(File::open(path.as_ref())?);
         let mut zip = zip::ZipArchive::new(zip_reader)?;
@@ -326,6 +337,7 @@ impl Tensor {
         Ok(result)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn write<T: Write>(&self, f: &mut T) -> Result<()> {
         f.write_all(NPY_MAGIC_STRING)?;
         f.write_all(&[1u8, 0u8])?;
@@ -346,12 +358,15 @@ impl Tensor {
     }
 
     /// Writes a multi-dimensional array in the npy format.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn write_npy<T: AsRef<Path>>(&self, path: T) -> Result<()> {
         let mut f = File::create(path.as_ref())?;
-        self.write(&mut f)
+        self.write(&mut f)?;
+        Ok(())
     }
 
     /// Writes multiple multi-dimensional arrays using the npz format.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn write_npz<S: AsRef<str>, T: AsRef<Tensor>, P: AsRef<Path>>(
         ts: &[(S, T)],
         path: P,
@@ -377,6 +392,7 @@ pub struct NpzTensors {
 }
 
 impl NpzTensors {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn new<T: AsRef<Path>>(path: T) -> Result<Self> {
         let path = path.as_ref().to_owned();
         let zip_reader = BufReader::new(File::open(&path)?);
@@ -402,6 +418,7 @@ impl NpzTensors {
 
     /// This only returns the shape and dtype for a named tensor. Compared to `get`, this avoids
     /// reading the whole tensor data.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn get_shape_and_dtype(&self, name: &str) -> Result<(Shape, DType)> {
         let index = match self.index_per_name.get(name) {
             None => crate::bail!("cannot find tensor {name}"),
@@ -415,6 +432,7 @@ impl NpzTensors {
         Ok((header.shape(), header.descr))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn get(&self, name: &str) -> Result<Option<Tensor>> {
         let index = match self.index_per_name.get(name) {
             None => return Ok(None),

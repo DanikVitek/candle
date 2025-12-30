@@ -146,16 +146,19 @@ impl ToUsize2 for (usize, usize) {
 
 /// Defining a module with forward method using a single argument.
 pub trait Module {
+    #[cfg_attr(feature = "iex", iex)]
     fn forward(&self, xs: &Tensor) -> Result<Tensor>;
 }
 
 impl<T: Fn(&Tensor) -> Result<Tensor>> Module for T {
+    #[cfg_attr(feature = "iex", iex)]
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         self(xs)
     }
 }
 
 impl<M: Module> Module for Option<&M> {
+    #[cfg_attr(feature = "iex", iex)]
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         match self {
             None => Ok(xs.clone()),
@@ -167,10 +170,12 @@ impl<M: Module> Module for Option<&M> {
 /// A single forward method using a single single tensor argument and a flag to
 /// separate the training and evaluation behaviors.
 pub trait ModuleT {
+    #[cfg_attr(feature = "iex", iex)]
     fn forward_t(&self, xs: &Tensor, train: bool) -> Result<Tensor>;
 }
 
 impl<M: Module> ModuleT for M {
+    #[cfg_attr(feature = "iex", iex)]
     fn forward_t(&self, xs: &Tensor, _train: bool) -> Result<Tensor> {
         self.forward(xs)
     }

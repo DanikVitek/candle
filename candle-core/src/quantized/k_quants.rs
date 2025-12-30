@@ -5,8 +5,11 @@ use super::utils::{
 use super::GgmlDType;
 use crate::quantized::utils::{make_qkx3_quants, make_qp_quants};
 use crate::Result;
+
 use byteorder::{ByteOrder, LittleEndian};
 use half::{bf16, f16, slice::HalfFloatSliceExt};
+#[cfg(feature = "iex")]
+use iex::iex;
 use rayon::prelude::*;
 
 // Default to QK_K 256 rather than 64.
@@ -2265,6 +2268,7 @@ impl GgmlType for BlockQ8K {
 }
 
 // https://github.com/ggml-org/llama.cpp/blob/aa3ee0eb0b80efca126cedf9bcb4fb5864b46ce3/ggml/src/ggml-cpu/ggml-cpu.c#L1205
+#[cfg_attr(feature = "iex", iex)]
 pub fn matmul<T: GgmlType>(
     (m, k, n): (usize, usize, usize),
     lhs: &[f32],
@@ -2314,6 +2318,7 @@ pub fn matmul<T: GgmlType>(
     Ok(())
 }
 
+#[cfg_attr(feature = "iex", iex)]
 pub fn matmul_f16<T: GgmlType>(
     mkn: (usize, usize, usize),
     lhs: &[f16],

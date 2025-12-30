@@ -2,7 +2,11 @@
 // This hardcodes objects that are required for tensor reading, we may want to make this a bit more
 // composable/tensor agnostic at some point.
 use crate::{Context, DType, Error as E, Layout, Result, Tensor};
+
 use byteorder::{LittleEndian, ReadBytesExt};
+#[cfg(feature = "iex")]
+use iex::iex;
+
 use std::collections::HashMap;
 use std::io::BufRead;
 
@@ -91,6 +95,7 @@ impl TryFrom<u8> for OpCode {
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn read_to_newline<R: BufRead>(r: &mut R) -> Result<Vec<u8>> {
     let mut data: Vec<u8> = Vec::with_capacity(32);
     r.read_until(b'\n', &mut data)?;
@@ -205,6 +210,7 @@ impl Object {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn into_tensor_info(
         self,
         name: Self,
@@ -310,6 +316,7 @@ impl Stack {
         self.stack.as_slice()
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn read_loop<R: BufRead>(&mut self, r: &mut R) -> Result<()> {
         loop {
             if self.read(r)? {
@@ -319,6 +326,7 @@ impl Stack {
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn finalize(mut self) -> Result<Object> {
         self.pop()
     }
@@ -327,6 +335,7 @@ impl Stack {
         self.stack.push(obj)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn pop(&mut self) -> Result<Object> {
         match self.stack.pop() {
             None => crate::bail!("unexpected empty stack"),
@@ -335,6 +344,7 @@ impl Stack {
     }
 
     // https://docs.juliahub.com/Pickle/LAUNc/0.1.0/opcode/#Pickle.OpCodes.BUILD
+    #[cfg_attr(feature = "iex", iex)]
     fn build(&mut self) -> Result<()> {
         let args = self.pop()?;
         let obj = self.pop()?;
@@ -352,6 +362,7 @@ impl Stack {
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn reduce(&mut self) -> Result<()> {
         let args = self.pop()?;
         let callable = self.pop()?;
@@ -380,6 +391,7 @@ impl Stack {
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn last(&mut self) -> Result<&mut Object> {
         match self.stack.last_mut() {
             None => crate::bail!("unexpected empty stack"),
@@ -387,6 +399,7 @@ impl Stack {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn memo_get(&self, id: u32) -> Result<Object> {
         match self.memo.get(&id) {
             None => crate::bail!("missing object in memo {id}"),
@@ -397,16 +410,19 @@ impl Stack {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn memo_put(&mut self, id: u32) -> Result<()> {
         let obj = self.last()?.clone();
         self.memo.insert(id, obj);
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn persistent_load(&self, id: Object) -> Result<Object> {
         Ok(Object::PersistentLoad(Box::new(id)))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn new_obj(&self, class: Object, args: Object) -> Result<Object> {
         Ok(Object::Reduce {
             callable: Box::new(class),
@@ -414,6 +430,7 @@ impl Stack {
         })
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn pop_to_marker(&mut self) -> Result<Vec<Object>> {
         let mut mark_idx = None;
         for (idx, obj) in self.stack.iter().enumerate().rev() {
@@ -434,6 +451,7 @@ impl Stack {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn read<R: BufRead>(&mut self, r: &mut R) -> Result<bool> {
         let op_code = match OpCode::try_from(r.read_u8()?) {
             Ok(op_code) => op_code,
@@ -623,6 +641,7 @@ impl From<Object> for E {
 
 // https://github.com/pytorch/pytorch/blob/4eac43d046ded0f0a5a5fa8db03eb40f45bf656e/torch/_utils.py#L198
 // Arguments: storage, storage_offset, size, stride, requires_grad, backward_hooks
+#[cfg_attr(feature = "iex", iex)]
 fn rebuild_args(args: Object) -> Result<(Layout, DType, String, usize)> {
     let mut args = args.tuple()?;
     let stride = Vec::<usize>::try_from(args.remove(3))?;
@@ -667,6 +686,7 @@ pub struct TensorInfo {
 /// * `file` - The path to the .pth file.
 /// * `verbose` - Whether to print debug information.
 /// * `key` - Optional key to retrieve `state_dict` from the pth file.
+#[cfg_attr(feature = "iex", iex)]
 pub fn read_pth_tensor_info<P: AsRef<std::path::Path>>(
     file: P,
     verbose: bool,
@@ -748,6 +768,7 @@ pub struct PthTensors {
 }
 
 impl PthTensors {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn new<P: AsRef<std::path::Path>>(path: P, key: Option<&str>) -> Result<Self> {
         let tensor_infos = read_pth_tensor_info(path.as_ref(), false, key)?;
         let tensor_infos = tensor_infos
@@ -762,6 +783,7 @@ impl PthTensors {
         &self.tensor_infos
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn get(&self, name: &str) -> Result<Option<Tensor>> {
         use std::io::Read;
         let tensor_info = match self.tensor_infos.get(name) {
@@ -817,6 +839,7 @@ impl PthTensors {
 /// * `path` - Path to the pth file.
 /// * `key` - Optional key to retrieve `state_dict` from the pth file. Sometimes the pth file
 ///   contains multiple objects and the state_dict is the one we are interested in.
+#[cfg_attr(feature = "iex", iex)]
 pub fn read_all_with_key<P: AsRef<std::path::Path>>(
     path: P,
     key: Option<&str>,
@@ -836,6 +859,7 @@ pub fn read_all_with_key<P: AsRef<std::path::Path>>(
 ///
 /// # Arguments
 /// * `path` - Path to the pth file.
+#[cfg_attr(feature = "iex", iex)]
 pub fn read_all<P: AsRef<std::path::Path>>(path: P) -> Result<Vec<(String, Tensor)>> {
     read_all_with_key(path, None)
 }

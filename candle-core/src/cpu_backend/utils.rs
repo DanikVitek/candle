@@ -2,10 +2,15 @@
 use crate::backend::BackendStorage;
 use crate::{Error, Layout, Result, WithDType};
 
+#[cfg(feature = "iex")]
+use iex::iex;
+
 type C = super::CpuStorage;
 pub trait Map1 {
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, vs: &[T], layout: &Layout) -> Result<Vec<T>>;
 
+    #[cfg_attr(feature = "iex", iex)]
     fn map(&self, vs: &C, layout: &Layout) -> Result<C> {
         match vs {
             C::U8(vs) => Ok(C::U8(self.f(vs, layout)?)),
@@ -28,8 +33,10 @@ pub trait Map1 {
 }
 
 pub trait Map1Any {
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType, W: Fn(Vec<T>) -> C>(&self, vs: &[T], layout: &Layout, wrap: W) -> Result<C>;
 
+    #[cfg_attr(feature = "iex", iex)]
     fn map(&self, vs: &C, layout: &Layout) -> Result<C> {
         match vs {
             C::U8(vs) => Ok(self.f(vs, layout, C::U8)?),
@@ -53,8 +60,11 @@ pub trait Map1Any {
 
 pub trait Map2 {
     const OP: &'static str;
+
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, v1: &[T], l1: &Layout, v2: &[T], l2: &Layout) -> Result<Vec<T>>;
 
+    #[cfg_attr(feature = "iex", iex)]
     fn map(&self, v1: &C, l1: &Layout, v2: &C, l2: &Layout) -> Result<C> {
         match (v1, v2) {
             (C::U8(v1), C::U8(v2)) => Ok(C::U8(self.f(v1, l1, v2, l2)?)),
@@ -79,8 +89,11 @@ pub trait Map2 {
 
 pub trait Map2InPlace {
     const OP: &'static str;
+
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, v1: &mut [T], l1: &Layout, v2: &[T], l2: &Layout) -> Result<()>;
 
+    #[cfg_attr(feature = "iex", iex)]
     fn map(&self, v1: &mut C, l1: &Layout, v2: &C, l2: &Layout) -> Result<()> {
         match (v1, v2) {
             (C::U8(v1), C::U8(v2)) => self.f(v1, l1, v2, l2)?,
@@ -106,8 +119,11 @@ pub trait Map2InPlace {
 
 pub trait Map2U8 {
     const OP: &'static str;
+
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, v1: &[T], l1: &Layout, v2: &[T], l2: &Layout) -> Result<Vec<u8>>;
 
+    #[cfg_attr(feature = "iex", iex)]
     fn map(&self, v1: &C, l1: &Layout, v2: &C, l2: &Layout) -> Result<C> {
         match (v1, v2) {
             (C::U8(v1), C::U8(v2)) => Ok(C::U8(self.f(v1, l1, v2, l2)?)),

@@ -2,6 +2,9 @@
 //!
 use crate::{Result, Shape, Tensor};
 
+#[cfg(feature = "iex")]
+use iex::iex;
+
 pub trait Dim: crate::shape::Dim + Copy {}
 impl<T: crate::shape::Dim + Copy> Dim for T {}
 
@@ -50,6 +53,7 @@ impl StreamTensor {
         self.0.as_ref().map(|t| t.shape())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn cat2<D: Dim>(&self, rhs: &Self, dim: D) -> Result<Self> {
         let xs = match (&self.0, &rhs.0) {
             (Some(lhs), Some(rhs)) => {
@@ -62,6 +66,7 @@ impl StreamTensor {
         Ok(Self(xs))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn seq_len<D: Dim>(&self, dim: D) -> Result<usize> {
         match &self.0 {
             None => Ok(0),
@@ -73,6 +78,7 @@ impl StreamTensor {
         self.0 = None
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn narrow<D: Dim>(&self, dim: D, offset: usize, len: usize) -> Result<StreamTensor> {
         let t = match &self.0 {
             None => None,
@@ -91,6 +97,7 @@ impl StreamTensor {
 
     /// Splits the Streaming Tensor on the time axis `dim` with the first `lhs_len` elements
     /// returned in the first output and the remaining in the second output.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn split<D: Dim>(&self, dim: D, lhs_len: usize) -> Result<(Self, Self)> {
         match &self.0 {
             None => Ok((Self::empty(), Self::empty())),
@@ -117,6 +124,7 @@ impl StreamTensor {
         self.0.as_ref()
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn apply<M: crate::Module>(&self, m: &M) -> Result<Self> {
         match &self.0 {
             None => Ok(Self::empty()),
@@ -130,6 +138,7 @@ impl StreamTensor {
 /// perform some operations.
 pub trait StreamingModule {
     // TODO: Should we also have a flush method?
+    #[cfg_attr(feature = "iex", iex)]
     fn step(&mut self, xs: &StreamTensor) -> Result<StreamTensor>;
     fn reset_state(&mut self);
 }
@@ -165,15 +174,17 @@ impl StreamingBinOp {
         self.prev_rhs.reset();
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn forward(&self, lhs: &Tensor, rhs: &Tensor) -> Result<Tensor> {
         match self.op {
-            BinOp::Add => Tensor::add(lhs, rhs),
-            BinOp::Mul => Tensor::mul(lhs, rhs),
-            BinOp::Sub => Tensor::sub(lhs, rhs),
-            BinOp::Div => Tensor::div(lhs, rhs),
+            BinOp::Add => Ok(Tensor::add(lhs, rhs)?),
+            BinOp::Mul => Ok(Tensor::mul(lhs, rhs)?),
+            BinOp::Sub => Ok(Tensor::sub(lhs, rhs)?),
+            BinOp::Div => Ok(Tensor::div(lhs, rhs)?),
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn step(&mut self, lhs: &StreamTensor, rhs: &StreamTensor) -> Result<StreamTensor> {
         let lhs = StreamTensor::cat2(&self.prev_lhs, lhs, self.dim)?;
         let rhs = StreamTensor::cat2(&self.prev_rhs, rhs, self.dim)?;
@@ -202,6 +213,7 @@ pub struct Map<T: crate::Module>(T);
 impl<T: crate::Module> StreamingModule for Map<T> {
     fn reset_state(&mut self) {}
 
+    #[cfg_attr(feature = "iex", iex)]
     fn step(&mut self, xs: &StreamTensor) -> Result<StreamTensor> {
         xs.apply(&self.0)
     }

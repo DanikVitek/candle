@@ -5,6 +5,10 @@ use crate::op::{BackpropOp, BinaryOp, CmpOp, Op, ReduceOp, UnaryOp};
 use crate::scalar::TensorOrScalar;
 use crate::shape::{Dim, Dims, ShapeWithOneHole};
 use crate::{bail, storage::Storage, DType, Device, Error, Layout, Result, Shape};
+
+#[cfg(feature = "iex")]
+use iex::iex;
+
 use std::sync::{Arc, RwLock};
 
 /// Unique identifier for tensors.
@@ -77,6 +81,7 @@ impl std::ops::Deref for Tensor {
 
 macro_rules! unary_op {
     ($fn_name:ident, $op_name:ident) => {
+        #[cfg_attr(feature = "iex", iex)]
         pub fn $fn_name(&self) -> Result<Self> {
             let shape = self.shape();
             if shape.elem_count() == 0 {
@@ -93,6 +98,7 @@ macro_rules! unary_op {
 
 macro_rules! binary_op {
     ($fn_name:ident, $op_name:ident) => {
+        #[cfg_attr(feature = "iex", iex)]
         pub fn $fn_name(&self, rhs: &Self) -> Result<Self> {
             let shape = self.same_shape_binary_op(rhs, stringify!($fn_name))?;
             if shape.elem_count() == 0 {
@@ -111,6 +117,7 @@ macro_rules! binary_op {
 
 macro_rules! binary_op_scalar {
     ($fn_name:ident, $op_name:ident) => {
+        #[cfg_attr(feature = "iex", iex)]
         pub fn $fn_name<T: TensorOrScalar>(&self, rhs: T) -> Result<Self> {
             let rhs = match rhs.to_tensor_scalar()? {
                 crate::scalar::TensorScalar::Tensor(rhs) => rhs,
@@ -136,6 +143,7 @@ macro_rules! binary_op_scalar {
 
 macro_rules! broadcast_binary_op {
     ($fn_name:ident, $inner_fn_name:ident) => {
+        #[cfg_attr(feature = "iex", iex)]
         pub fn $fn_name(&self, rhs: &Self) -> Result<Self> {
             let lhs = self;
             let shape = lhs
@@ -144,12 +152,12 @@ macro_rules! broadcast_binary_op {
             let l_broadcast = shape != *lhs.shape();
             let r_broadcast = shape != *rhs.shape();
             match (l_broadcast, r_broadcast) {
-                (true, true) => lhs
+                (true, true) => Ok(lhs
                     .broadcast_as(&shape)?
-                    .$inner_fn_name(&rhs.broadcast_as(&shape)?),
-                (false, true) => lhs.$inner_fn_name(&rhs.broadcast_as(&shape)?),
-                (true, false) => lhs.broadcast_as(&shape)?.$inner_fn_name(rhs),
-                (false, false) => lhs.$inner_fn_name(rhs),
+                    .$inner_fn_name(&rhs.broadcast_as(&shape)?)?),
+                (false, true) => Ok(lhs.$inner_fn_name(&rhs.broadcast_as(&shape)?)?),
+                (true, false) => Ok(lhs.broadcast_as(&shape)?.$inner_fn_name(rhs)?),
+                (false, false) => Ok(lhs.$inner_fn_name(rhs)?),
             }
         }
     };
@@ -177,6 +185,7 @@ pub(crate) fn from_storage<S: Into<Shape>>(
 }
 
 impl Tensor {
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn ones_impl<S: Into<Shape>>(
         shape: S,
         dtype: DType,
@@ -200,18 +209,22 @@ impl Tensor {
     /// // a == b
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn ones<S: Into<Shape>>(shape: S, dtype: DType, device: &Device) -> Result<Self> {
         Self::ones_impl(shape, dtype, device, false)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn const_set(&self, value: crate::scalar::Scalar) -> Result<()> {
-        self.storage_mut().const_set(value, self.layout())
+        Ok(self.storage_mut().const_set(value, self.layout())?)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn zero_set(&self) -> Result<()> {
         self.const_set(crate::scalar::Scalar::zero(self.dtype()))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn one_set(&self) -> Result<()> {
         self.const_set(crate::scalar::Scalar::one(self.dtype()))
     }
@@ -225,12 +238,14 @@ impl Tensor {
     /// // b == a + 1
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn ones_like(&self) -> Result<Self> {
         Tensor::ones(self.shape(), self.dtype(), self.device())
     }
 
     // Do not expose outside of the crate, the `is_variable=true` case should only be accessed from
     // the variable module.
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn zeros_impl<S: Into<Shape>>(
         shape: S,
         dtype: DType,
@@ -252,6 +267,7 @@ impl Tensor {
     /// // a == b
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn zeros<S: Into<Shape>>(shape: S, dtype: DType, device: &Device) -> Result<Self> {
         Self::zeros_impl(shape, dtype, device, false)
     }
@@ -266,12 +282,14 @@ impl Tensor {
     /// // b is on CPU f32.
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn zeros_like(&self) -> Result<Self> {
         Tensor::zeros(self.shape(), self.dtype(), self.device())
     }
 
     // Do not expose outside of the crate, the `is_variable=true` case should only be accessed from
     // the variable module.
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) unsafe fn empty_impl<S: Into<Shape>>(
         shape: S,
         dtype: DType,
@@ -295,6 +313,7 @@ impl Tensor {
     /// // a == b
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub unsafe fn empty<S: Into<Shape>>(shape: S, dtype: DType, device: &Device) -> Result<Self> {
         Self::empty_impl(shape, dtype, device, false)
     }
@@ -311,10 +330,12 @@ impl Tensor {
     /// let b = unsafe { a.empty_like()? };
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub unsafe fn empty_like(&self) -> Result<Self> {
         Tensor::empty(self.shape(), self.dtype(), self.device())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn rand_impl<S: Into<Shape>, T: crate::FloatDType>(
         lo: T,
         up: T,
@@ -328,6 +349,7 @@ impl Tensor {
         Ok(from_storage(storage, s, none, is_variable))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn rand_f64_impl<S: Into<Shape>>(
         lo: f64,
         up: f64,
@@ -343,6 +365,7 @@ impl Tensor {
     }
 
     /// Creates a new tensor initialized with values sampled uniformly between `lo` and `up`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn rand<S: Into<Shape>, T: crate::FloatDType>(
         lo: T,
         up: T,
@@ -352,10 +375,12 @@ impl Tensor {
         Self::rand_impl(lo, up, s, device, false)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn rand_like(&self, lo: f64, up: f64) -> Result<Self> {
         Tensor::rand_f64_impl(lo, up, self.shape(), self.dtype(), self.device(), false)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn randn_impl<S: Into<Shape>, T: crate::FloatDType>(
         mean: T,
         std: T,
@@ -369,6 +394,7 @@ impl Tensor {
         Ok(from_storage(storage, s, none, is_variable))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn randn_f64_impl<S: Into<Shape>>(
         mean: f64,
         std: f64,
@@ -383,6 +409,7 @@ impl Tensor {
         Ok(from_storage(storage, s, none, is_variable))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn randn_like(&self, mean: f64, stdev: f64) -> Result<Self> {
         Tensor::randn_f64_impl(
             mean,
@@ -396,6 +423,7 @@ impl Tensor {
 
     /// Creates a new tensor initialized with values sampled from a normal distribution with the
     /// specified `mean` and standard deviation `std`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn randn<S: Into<Shape>, T: crate::FloatDType>(
         mean: T,
         std: T,
@@ -405,6 +433,7 @@ impl Tensor {
         Self::randn_impl(mean, std, s, device, false)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn new_impl<A: crate::device::NdArray>(
         array: A,
         shape: Shape,
@@ -422,6 +451,7 @@ impl Tensor {
     }
 
     /// Creates a new tensor on the specified device using the content and shape of the input.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn new<A: crate::device::NdArray>(array: A, device: &Device) -> Result<Self> {
         let shape = array.shape()?;
         Self::new_impl(array, shape, device, false)
@@ -437,6 +467,7 @@ impl Tensor {
     ///     [3.5, 3.5, 3.5, 3.5],
     /// ]);
     /// # Ok::<(), candle_core::Error>(())
+    #[cfg_attr(feature = "iex", iex)]
     pub fn full<D: crate::WithDType, S: Into<Shape>>(
         value: D,
         shape: S,
@@ -458,6 +489,7 @@ impl Tensor {
     /// assert_eq!(a.to_vec1::<f64>()?, &[1.0, 2.0, 3.0, 4.0]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn from_iter<D: crate::WithDType>(
         iter: impl IntoIterator<Item = D>,
         device: &Device,
@@ -476,6 +508,7 @@ impl Tensor {
     /// assert_eq!(a.to_vec1::<f64>()?, &[2., 3., 4.]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn arange<D: crate::WithDType>(start: D, end: D, device: &Device) -> Result<Self> {
         Self::arange_step(start, end, D::one(), device)
     }
@@ -489,6 +522,7 @@ impl Tensor {
     /// assert_eq!(a.to_vec1::<f64>()?, &[2.0, 2.5, 3.0, 3.5]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn arange_step<D: crate::WithDType>(
         start: D,
         end: D,
@@ -512,9 +546,10 @@ impl Tensor {
             }
         }
         let len = data.len();
-        Self::from_vec_impl(data, len, device, false)
+        Ok(Self::from_vec_impl(data, len, device, false)?)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn from_vec_impl<S: ShapeWithOneHole, D: crate::WithDType>(
         data: Vec<D>,
         shape: S,
@@ -540,6 +575,7 @@ impl Tensor {
     /// ]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn from_vec<S: ShapeWithOneHole, D: crate::WithDType>(
         data: Vec<D>,
         shape: S,
@@ -561,6 +597,7 @@ impl Tensor {
     /// ]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn from_slice<S: ShapeWithOneHole, D: crate::WithDType>(
         array: &[D],
         shape: S,
@@ -572,6 +609,7 @@ impl Tensor {
         Ok(from_storage(storage, shape, none, false))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn same_shape_binary_op(&self, rhs: &Self, op: &'static str) -> Result<&Shape> {
         let lhs = self.shape();
         let rhs = rhs.shape();
@@ -652,6 +690,7 @@ impl Tensor {
     ///
     /// If the number of decimals is negative, it specifies the number of positions to the left of
     /// the decimal point.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn round_to(&self, decimals: i32) -> Result<Self> {
         let mult = 10f64.powi(decimals);
         (self * mult)?.round()? * (1f64 / mult)
@@ -659,6 +698,7 @@ impl Tensor {
 
     /// Retrieves the single scalar value hold in the tensor. If the tensor contains multiple
     /// dimensions, an error is returned instead.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_scalar<S: crate::WithDType>(&self) -> Result<S> {
         if self.rank() != 0 {
             Err(Error::UnexpectedNumberOfDims {
@@ -668,23 +708,31 @@ impl Tensor {
             }
             .bt())?
         }
-        let from_cpu_storage = |cpu_storage: &crate::CpuStorage| {
+
+        #[cfg_attr(feature = "iex", iex)]
+        fn from_cpu_storage<S: crate::WithDType>(
+            tensor: &Tensor,
+            cpu_storage: &crate::CpuStorage,
+        ) -> Result<S> {
             let data = S::cpu_storage_as_slice(cpu_storage)?;
-            Ok::<_, Error>(data[self.layout().start_offset()])
-        };
+            Ok(data[tensor.layout().start_offset()])
+        }
+
         match &*self.storage() {
-            Storage::Cpu(cpu_storage) => from_cpu_storage(cpu_storage),
-            Storage::Cuda(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
-            Storage::Metal(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
+            Storage::Cpu(cpu_storage) => Ok(from_cpu_storage(self, cpu_storage)?),
+            Storage::Cuda(storage) => Ok(from_cpu_storage(self, &storage.to_cpu_storage()?)?),
+            Storage::Metal(storage) => Ok(from_cpu_storage(self, &storage.to_cpu_storage()?)?),
         }
     }
 
     /// An alias for `to_scalar`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_vec0<S: crate::WithDType>(&self) -> Result<S> {
         self.to_scalar::<S>()
     }
 
     /// Repeat this tensor along the specified dimensions.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn repeat<S: Into<Shape>>(&self, shape: S) -> Result<Tensor> {
         // Similar to PyTorch, we extend the number of dimensions of self if needed.
         let repeats = shape.into();
@@ -739,6 +787,7 @@ impl Tensor {
     ///
     /// * Will return `Err` if `args` contains less than 2 tensors.
     ///
+    #[cfg_attr(feature = "iex", iex)]
     pub fn meshgrid<A: AsRef<Tensor>>(args: &[A], xy_indexing: bool) -> Result<Vec<Self>> {
         if args.len() <= 1 {
             Err(Error::OpRequiresAtLeastTwoTensors { op: "meshgrid" }.bt())?
@@ -781,6 +830,7 @@ impl Tensor {
     /// assert_eq!(a.to_vec2::<f32>()?, &[[-2.0, 2.0], [6.0, 10.0]]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn affine(&self, mul: f64, add: f64) -> Result<Self> {
         if self.elem_count() == 0 {
             return Ok(self.clone());
@@ -791,6 +841,7 @@ impl Tensor {
     }
 
     /// Applies the Exponential Linear Unit (ELU) function on each element of the input tensor.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn elu(&self, alpha: f64) -> Result<Self> {
         if self.elem_count() == 0 {
             return Ok(self.clone());
@@ -801,6 +852,7 @@ impl Tensor {
     }
 
     /// Raise the tensor to some float exponent `e`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn powf(&self, e: f64) -> Result<Self> {
         if self.elem_count() == 0 {
             return Ok(self.clone());
@@ -810,6 +862,7 @@ impl Tensor {
         Ok(from_storage(storage, self.shape(), op, false))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn check_dim(&self, dim: usize, op: &'static str) -> Result<()> {
         if dim >= self.dims().len() {
             Err(Error::DimOutOfRange {
@@ -825,11 +878,16 @@ impl Tensor {
 
     /// Split a tensor into the specified number of chunks, this may return less chunks than
     /// specified.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn chunk<D: Dim>(&self, chunks: usize, dim: D) -> Result<Vec<Self>> {
         let dim = dim.to_index(self.shape(), "chunk")?;
         let size = self.dim(dim)?;
         if size < chunks {
-            (0..size).map(|i| self.narrow(dim, i, 1)).collect()
+            let mut chunks = Vec::with_capacity(size);
+            for i in 0..size {
+                chunks.push(self.narrow(dim, i, 1)?);
+            }
+            Ok(chunks)
         } else {
             let chunk_size = size / chunks;
             let cnt_additional = size % chunks;
@@ -875,6 +933,7 @@ impl Tensor {
     /// ]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn narrow<D: Dim>(&self, dim: D, start: usize, len: usize) -> Result<Self> {
         let dims = self.dims();
         let dim = dim.to_index(self.shape(), "narrow")?;
@@ -914,10 +973,11 @@ impl Tensor {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn squeeze_dims(self, dims: &[usize]) -> Result<Self> {
         match dims {
             [] => Ok(self),
-            [i] => self.squeeze(*i),
+            [i] => Ok(self.squeeze(*i)?),
             dims => {
                 let dims = self
                     .dims()
@@ -931,11 +991,12 @@ impl Tensor {
                         }
                     })
                     .collect::<Vec<_>>();
-                self.reshape(dims)
+                Ok(self.reshape(dims)?)
             }
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn reduce_impl<D: Dim>(&self, dim: D, keepdim: bool, op: ReduceOp) -> Result<Self> {
         let dim = dim.to_index(self.shape(), op.name())?;
         let storage = self.storage().reduce_op(op, self.layout(), &[dim])?;
@@ -951,10 +1012,11 @@ impl Tensor {
         if keepdim {
             Ok(res)
         } else {
-            res.squeeze_dims(&[dim])
+            Ok(res.squeeze_dims(&[dim])?)
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn sum_impl<D: Dims>(&self, sum_dims: D, keepdim: bool) -> Result<Self> {
         let sum_dims = sum_dims.to_indexes(self.shape(), "sum")?;
         let storage = self
@@ -969,7 +1031,7 @@ impl Tensor {
         if keepdim {
             Ok(sum)
         } else {
-            sum.squeeze_dims(&sum_dims)
+            Ok(sum.squeeze_dims(&sum_dims)?)
         }
     }
 
@@ -986,6 +1048,7 @@ impl Tensor {
     /// assert_eq!(tensor.to_vec2::<f32>()?, &[[2., 3.], [4., 5.], [0., 1.]]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn roll<D>(&self, shift: i32, dim: D) -> Result<Self>
     where
         D: Dim + Clone,
@@ -998,7 +1061,7 @@ impl Tensor {
         } else {
             let a = self.narrow(dim, 0, dim_size - shift)?;
             let b = self.narrow(dim, dim_size - shift, shift)?;
-            Tensor::cat(&[&b, &a], dim)
+            Ok(Tensor::cat(&[&b, &a], dim)?)
         }
     }
 
@@ -1019,6 +1082,7 @@ impl Tensor {
     /// assert_eq!(s.to_vec2::<f32>()?, &[[6.]]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn sum_keepdim<D: Dims>(&self, sum_dims: D) -> Result<Self> {
         self.sum_impl(sum_dims, true)
     }
@@ -1026,6 +1090,7 @@ impl Tensor {
     /// Returns the sum of all elements in the input tensor. The sum is performed over all the
     /// input dimensions and compared to `sum_keepdim` these dimensions are squeezed rather than
     /// kept.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn sum<D: Dims>(&self, sum_dims: D) -> Result<Self> {
         self.sum_impl(sum_dims, false)
     }
@@ -1047,6 +1112,7 @@ impl Tensor {
     /// assert_eq!(s.to_vec2::<f32>()?, &[[1.5]]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn mean_keepdim<D: Dims>(&self, mean_dims: D) -> Result<Self> {
         let mean_dims = mean_dims.to_indexes(self.shape(), "mean-keepdim")?;
         let reduced_dim: usize = mean_dims.iter().map(|i| self.dims()[*i]).product();
@@ -1057,6 +1123,7 @@ impl Tensor {
     /// Returns the mean of all elements in the input tensor. The mean is performed over all the
     /// input dimensions and compared to `mean_keepdim` these dimensions are squeezed rather than
     /// kept.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn mean<D: Dims>(&self, mean_dims: D) -> Result<Self> {
         let mean_dims = mean_dims.to_indexes(self.shape(), "mean")?;
         let reduced_dim: usize = mean_dims.iter().map(|i| self.dims()[*i]).product();
@@ -1065,6 +1132,7 @@ impl Tensor {
     }
 
     /// Returns the unbiased variance over the selected dimension.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn var_keepdim<D: Dim>(&self, dim: D) -> Result<Self> {
         let dim = dim.to_index(self.shape(), "var")?;
         let mean = self.mean_keepdim(dim)?;
@@ -1073,47 +1141,56 @@ impl Tensor {
     }
 
     /// Returns the unbiased variance over the selected dimension.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn var<D: Dim>(&self, dim: D) -> Result<Self> {
         let dim = dim.to_index(self.shape(), "var")?;
-        self.var_keepdim(dim)?.squeeze(dim)
+        Ok(self.var_keepdim(dim)?.squeeze(dim)?)
     }
 
     /// Gathers the maximum value across the selected dimension. The resulting shape has the same
     /// number of dimensions as the original tensor and the select dimension has a single element.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn max_keepdim<D: Dim>(&self, dim: D) -> Result<Self> {
         self.reduce_impl(dim, true, ReduceOp::Max)
     }
 
     /// Similar to `max_keepdim` but the target dimension is squeezed.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn max<D: Dim>(&self, dim: D) -> Result<Self> {
         self.reduce_impl(dim, false, ReduceOp::Max)
     }
 
     /// Gathers the minimum value across the selected dimension. The resulting shape has the same
     /// number of dimensions as the original tensor and the select dimension has a single element.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn min_keepdim<D: Dim>(&self, dim: D) -> Result<Self> {
         self.reduce_impl(dim, true, ReduceOp::Min)
     }
 
     /// Similar to `min_keepdim` but the target dimension is squeezed.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn min<D: Dim>(&self, dim: D) -> Result<Self> {
         self.reduce_impl(dim, false, ReduceOp::Min)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn argmax_keepdim<D: Dim>(&self, dim: D) -> Result<Self> {
         self.reduce_impl(dim, true, ReduceOp::ArgMax)
     }
 
     /// Similar to `argmax_keepdim` but the target dimension is squeezed.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn argmax<D: Dim>(&self, dim: D) -> Result<Self> {
         self.reduce_impl(dim, false, ReduceOp::ArgMax)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn argmin_keepdim<D: Dim>(&self, dim: D) -> Result<Self> {
         self.reduce_impl(dim, true, ReduceOp::ArgMin)
     }
 
     /// Similar to `argmin_keepdim` but the target dimension is squeezed.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn argmin<D: Dim>(&self, dim: D) -> Result<Self> {
         self.reduce_impl(dim, false, ReduceOp::ArgMin)
     }
@@ -1122,6 +1199,7 @@ impl Tensor {
     /// comparison operation is specified by the `op` argument.
     ///
     /// The returned tensor has the same shape as the original tensors and uses `u8` elements.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn cmp<T: TensorOrScalar>(&self, rhs: T, op: CmpOp) -> Result<Self> {
         let rhs = match rhs.to_tensor_scalar()? {
             crate::scalar::TensorScalar::Tensor(rhs) => rhs,
@@ -1139,48 +1217,56 @@ impl Tensor {
     }
 
     /// Element-wise equality.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn eq<T: TensorOrScalar>(&self, rhs: T) -> Result<Self> {
         self.cmp(rhs, CmpOp::Eq)
     }
 
     /// Element-wise non-equality.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn ne<T: TensorOrScalar>(&self, rhs: T) -> Result<Self> {
         self.cmp(rhs, CmpOp::Ne)
     }
 
     /// Element-wise comparison with lower-than, the returned tensor uses value 1 where `self <
     /// rhs` and 0 otherwise.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn lt<T: TensorOrScalar>(&self, rhs: T) -> Result<Self> {
         self.cmp(rhs, CmpOp::Lt)
     }
 
     /// Element-wise comparison with greater-than, the returned tensor uses value 1 where `self >
     /// rhs` and 0 otherwise.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn gt<T: TensorOrScalar>(&self, rhs: T) -> Result<Self> {
         self.cmp(rhs, CmpOp::Gt)
     }
 
     /// Element-wise comparison with greater-equal, the returned tensor uses value 1 where `self >=
     /// rhs` and 0 otherwise.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn ge<T: TensorOrScalar>(&self, rhs: T) -> Result<Self> {
         self.cmp(rhs, CmpOp::Ge)
     }
 
     /// Element-wise comparison with lower-equal, the returned tensor uses value 1 where `self <=
     /// rhs` and 0 otherwise.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn le<T: TensorOrScalar>(&self, rhs: T) -> Result<Self> {
         self.cmp(rhs, CmpOp::Le)
     }
 
     /// Clamp the tensor values to be between `min` and `max`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn clamp<T1: TensorOrScalar, T2: TensorOrScalar>(&self, min: T1, max: T2) -> Result<Self> {
-        self.maximum(min)?.minimum(max)
+        Ok(self.maximum(min)?.minimum(max)?)
     }
 
     /// Interpolate the input tensor to the `target_size` size, taking the value of the nearest element.
     ///
     /// The input tensor should have three dimensions, `(batch, channels, l)`, the returned
     /// tensor also has three dimensions, `(batch, channels, target_size)`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn interpolate1d(&self, target_size: usize) -> Result<Self> {
         let (n, c, _l) = self.dims3()?;
         let op = BackpropOp::new1(self, |arg| Op::UpsampleNearest1D { arg, target_size });
@@ -1191,6 +1277,7 @@ impl Tensor {
     }
 
     /// Alias for `interpolate1d`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn upsample_nearest1d(&self, target_size: usize) -> Result<Self> {
         self.interpolate1d(target_size)
     }
@@ -1200,6 +1287,7 @@ impl Tensor {
     ///
     /// The input tensor should have four dimensions, `(batch, channels, h, w)`, the returned
     /// tensor also has four dimensions, `(batch, channels, target_h, target_w)`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn interpolate2d(&self, target_h: usize, target_w: usize) -> Result<Self> {
         let (n, c, _h, _w) = self.dims4()?;
         let op = BackpropOp::new1(self, |arg| Op::UpsampleNearest2D {
@@ -1214,6 +1302,7 @@ impl Tensor {
     }
 
     /// Alias for `interpolate2d`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn upsample_nearest2d(&self, target_h: usize, target_w: usize) -> Result<Self> {
         self.interpolate2d(target_h, target_w)
     }
@@ -1226,7 +1315,7 @@ impl Tensor {
     /// # Arguments
     ///
     /// * `target_h` - Target height
-    /// * `target_w` - Target width  
+    /// * `target_w` - Target width
     /// * `align_corners` - If true, corner pixels are aligned. If false (default),
     ///   pixels are treated as areas (matches PyTorch default behavior).
     ///
@@ -1241,6 +1330,7 @@ impl Tensor {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn upsample_bilinear2d(
         &self,
         target_h: usize,
@@ -1289,6 +1379,7 @@ impl Tensor {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn upsample_bilinear2d_with_scale(
         &self,
         scale_h: f64,
@@ -1337,6 +1428,7 @@ impl Tensor {
     /// tensor also has four dimensions, `(batch, channels, h', w')`. The pooling is performed on
     /// the two last dimensions using a kernel of size `sz`. The returned element is the average
     /// value over the kernel window.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn avg_pool2d<T: crate::ToUsize2>(&self, sz: T) -> Result<Self> {
         let sz = sz.to_usize2();
         self.avg_pool2d_with_stride(sz, sz)
@@ -1344,6 +1436,7 @@ impl Tensor {
 
     /// Same as `avg_pool2d` but with a `stride` that can be set to a value different from the
     /// kernel size.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn avg_pool2d_with_stride<T: crate::ToUsize2>(
         &self,
         kernel_size: T,
@@ -1375,6 +1468,7 @@ impl Tensor {
     /// tensor also has four dimensions, `(batch, channels, h', w')`. The pooling is performed on
     /// the two last dimensions using a kernel of size `sz`, the returned element is the maximum
     /// value over the kernel window.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn max_pool2d<T: crate::ToUsize2>(&self, sz: T) -> Result<Self> {
         let sz = sz.to_usize2();
         self.max_pool2d_with_stride(sz, sz)
@@ -1382,6 +1476,7 @@ impl Tensor {
 
     /// Same as `max_pool2d` but with a `stride` that can be set to a value different from the
     /// kernel size.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn max_pool2d_with_stride<T: crate::ToUsize2>(
         &self,
         kernel_size: T,
@@ -1422,6 +1517,7 @@ impl Tensor {
     /// assert_eq!(res.to_scalar::<f64>()?, 32.);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn dot(&self, rhs: &Self) -> Result<Self> {
         if self.dims().len() != 1 || rhs.dims().len() != 1 {
             return Err(Error::ShapeMismatchBinaryOp {
@@ -1431,7 +1527,7 @@ impl Tensor {
             });
         }
 
-        (self * rhs).and_then(|ret| ret.sum_all())
+        Ok((self * rhs)?.sum_all()?)
     }
 
     /// Computes the **Frobenius norm** (L2 norm of all elements) of the tensor.
@@ -1446,6 +1542,7 @@ impl Tensor {
     /// assert_eq!(norm.to_scalar::<f64>()?, 5.);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn norm(&self) -> Result<Self> {
         if self.dtype().is_int() {
             bail!("norm not supported for integer dtypes");
@@ -1468,6 +1565,7 @@ impl Tensor {
     /// assert_eq!(res.to_vec1::<f64>()?, [6., 15.]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn mv(&self, rhs: &Self) -> Result<Self> {
         // Strict shape checks
         let lhs_dims = self.dims();
@@ -1492,6 +1590,7 @@ impl Tensor {
     /// * `rhs` - A tensor with dimensions `b1, b2, ..., bi, k, n`.
     ///
     /// The resulting tensor has dimensions `b1, b2, ..., bi, m, n`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn matmul(&self, rhs: &Self) -> Result<Self> {
         let a_dims = self.shape().dims();
         let b_dims = rhs.shape().dims();
@@ -1542,6 +1641,7 @@ impl Tensor {
     /// Compared to `matmul` the two matrixes are allowed to have different dimensions as long as
     /// they are compatible for broadcast. E.g. if `self` has shape `(j, 1, n, k)` and `rhs` has
     /// shape `(l, k, m)`, the output will have shape `(j, l, n, m)`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn broadcast_matmul(&self, rhs: &Self) -> Result<Self> {
         let lhs = self;
         let (l_shape, r_shape) = lhs.shape().broadcast_shape_matmul(rhs.shape())?;
@@ -1549,19 +1649,20 @@ impl Tensor {
         let r_broadcast = r_shape != *rhs.shape();
         // TODO: Avoid concretising the broadcasted matrixes via contiguous.
         match (l_broadcast, r_broadcast) {
-            (true, true) => lhs
+            (true, true) => Ok(lhs
                 .broadcast_as(&l_shape)?
                 .contiguous()?
-                .matmul(&rhs.broadcast_as(&r_shape)?.contiguous()?),
-            (false, true) => lhs.matmul(&rhs.broadcast_as(&r_shape)?.contiguous()?),
-            (true, false) => lhs.broadcast_as(&l_shape)?.contiguous()?.matmul(rhs),
-            (false, false) => lhs.matmul(rhs),
+                .matmul(&rhs.broadcast_as(&r_shape)?.contiguous()?)?),
+            (false, true) => Ok(lhs.matmul(&rhs.broadcast_as(&r_shape)?.contiguous()?)?),
+            (true, false) => Ok(lhs.broadcast_as(&l_shape)?.contiguous()?.matmul(rhs)?),
+            (false, false) => Ok(lhs.matmul(rhs)?),
         }
     }
 
     /// Returns a tensor with the same shape as the input tensor, the values are taken from
     /// `on_true` if the input tensor value is not zero, and `on_false` at the positions where the
     /// input tensor is equal to zero.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn where_cond(&self, on_true: &Self, on_false: &Self) -> Result<Self> {
         let _shap = self.same_shape_binary_op(on_true, "where_cond")?;
         let shape = self.same_shape_binary_op(on_false, "where_cond")?;
@@ -1595,6 +1696,7 @@ impl Tensor {
     /// assert_eq!(emb.to_vec2::<f32>()?, &[[4., 5.], [2., 3.], [4., 5.]]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn embedding(&self, ids: &Self) -> Result<Self> {
         if self.rank() != 2 || ids.rank() != 1 {
             Err(Error::ShapeMismatchBinaryOp {
@@ -1607,6 +1709,7 @@ impl Tensor {
         self.index_select(ids, 0)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn scatter_checks(&self, indexes: &Self, source: &Self, dim: usize) -> Result<()> {
         let source_dims = source.dims();
         let self_dims = self.dims();
@@ -1641,6 +1744,7 @@ impl Tensor {
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn scatter<D: Dim>(&self, indexes: &Self, source: &Self, dim: D) -> Result<Self> {
         let dim = dim.to_index(self.shape(), "scatter")?;
         self.scatter_checks(indexes, source, dim)?;
@@ -1663,6 +1767,7 @@ impl Tensor {
         Ok(from_storage(storage, self.shape(), op, false))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn scatter_set<D: Dim>(&self, indexes: &Self, source: &Self, dim: D) -> Result<()> {
         if self.same_storage(source) {
             crate::bail!("cannot use slice_set when self and src share their storage")
@@ -1680,6 +1785,7 @@ impl Tensor {
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn scatter_add<D: Dim>(&self, indexes: &Self, source: &Self, dim: D) -> Result<Self> {
         let dim = dim.to_index(self.shape(), "scatter-add")?;
         self.scatter_checks(indexes, source, dim)?;
@@ -1702,6 +1808,7 @@ impl Tensor {
         Ok(from_storage(storage, self.shape(), op, false))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn scatter_add_set<D: Dim>(&self, indexes: &Self, source: &Self, dim: D) -> Result<()> {
         if self.same_storage(source) {
             crate::bail!("cannot use slice_set when self and src share their storage")
@@ -1720,6 +1827,7 @@ impl Tensor {
     }
 
     /// Embeds the values of the `src` tensor into the `self` tensor on the specified dimension.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn slice_scatter<D: Dim>(&self, src: &Self, dim: D, start: usize) -> Result<Self> {
         let dim = dim.to_index(self.shape(), "slice-scatter")?;
         if dim == 0 {
@@ -1733,6 +1841,7 @@ impl Tensor {
     }
 
     /// Embeds the values of the `src` tensor into the `self` tensor on the first dimension.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn slice_scatter0(&self, src: &Self, start: usize) -> Result<Self> {
         if self.dtype() != src.dtype() {
             Err(Error::DTypeMismatchBinaryOp {
@@ -1789,6 +1898,7 @@ impl Tensor {
     }
 
     /// Accumulate element from `source` at indexes `indexes` and add them to `self`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn index_add<D: Dim>(&self, indexes: &Self, source: &Self, dim: D) -> Result<Self> {
         let dim = dim.to_index(self.shape(), "index-add")?;
         let source_dims = source.dims();
@@ -1850,6 +1960,7 @@ impl Tensor {
     ///
     /// The resulting tensor has the same shape as `indexes` and use values from `self` indexed on
     /// dimension `dim` by the values in `indexes`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn gather<D: Dim>(&self, indexes: &Self, dim: D) -> Result<Self> {
         let dim = dim.to_index(self.shape(), "gather")?;
 
@@ -1889,6 +2000,7 @@ impl Tensor {
     /// the output has length the length of `indexes` and the values are taken from `self` using
     /// the index from `indexes`. Other dimensions have the same number of elements as the input
     /// tensor.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn index_select<D: Dim>(&self, indexes: &Self, dim: D) -> Result<Self> {
         let dim = dim.to_index(self.shape(), "index-select")?;
         let indexes_len = match indexes.dims() {
@@ -1927,6 +2039,7 @@ impl Tensor {
     }
 
     /// Returns the data contained in a 1D tensor as a vector of scalar values.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_vec1<S: crate::WithDType>(&self) -> Result<Vec<S>> {
         if self.rank() != 1 {
             Err(Error::UnexpectedNumberOfDims {
@@ -1952,6 +2065,7 @@ impl Tensor {
     }
 
     /// Returns the data contained in a 2D tensor as a vector of vector of scalar values.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_vec2<S: crate::WithDType>(&self) -> Result<Vec<Vec<S>>> {
         let (dim1, dim2) = self.dims2()?;
         let from_cpu_storage = |cpu_storage: &crate::CpuStorage| {
@@ -1983,6 +2097,7 @@ impl Tensor {
     }
 
     /// Returns the data contained in a 3D tensor.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_vec3<S: crate::WithDType>(&self) -> Result<Vec<Vec<Vec<S>>>> {
         let (dim1, dim2, dim3) = self.dims3()?;
         let from_cpu_storage = |cpu_storage: &crate::CpuStorage| {
@@ -2044,6 +2159,7 @@ impl Tensor {
     }
 
     /// The dimension size for a specified dimension index.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn dim<D: Dim>(&self, dim: D) -> Result<usize> {
         let dim = dim.to_index(self.shape(), "dim")?;
         Ok(self.dims()[dim])
@@ -2094,11 +2210,12 @@ impl Tensor {
     /// assert_eq!(tensor.to_scalar::<f32>()?, 5.);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn max_all(&self) -> Result<Tensor> {
         if self.rank() == 0 {
             Ok(self.clone())
         } else {
-            self.flatten_all()?.max(0)
+            Ok(self.flatten_all()?.max(0)?)
         }
     }
 
@@ -2112,11 +2229,12 @@ impl Tensor {
     /// assert_eq!(tensor.to_scalar::<f32>()?, 0.);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn min_all(&self) -> Result<Tensor> {
         if self.rank() == 0 {
             Ok(self.clone())
         } else {
-            self.flatten_all()?.min(0)
+            Ok(self.flatten_all()?.min(0)?)
         }
     }
 
@@ -2130,15 +2248,18 @@ impl Tensor {
     /// assert_eq!(tensor.to_scalar::<f32>()?, 15.);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn sum_all(&self) -> Result<Tensor> {
         let dims: Vec<_> = (0..self.rank()).collect();
         self.sum(dims)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn mean_all(&self) -> Result<Tensor> {
         self.sum_all()? / self.elem_count() as f64
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn flatten_<D1: Dim, D2: Dim>(
         &self,
         start_dim: Option<D1>,
@@ -2171,17 +2292,20 @@ impl Tensor {
 
     /// Flattens the input tensor on the dimension indexes from `start_dim` to `end_dim` (both
     /// inclusive).
+    #[cfg_attr(feature = "iex", iex)]
     pub fn flatten<D1: Dim, D2: Dim>(&self, start_dim: D1, end_dim: D2) -> Result<Tensor> {
         self.flatten_(Some(start_dim), Some(end_dim))
     }
 
     /// Flattens the input tensor on the dimension indexes from `0` to `end_dim` (inclusive).
+    #[cfg_attr(feature = "iex", iex)]
     pub fn flatten_to<D: Dim>(&self, end_dim: D) -> Result<Tensor> {
         self.flatten_(None::<usize>, Some(end_dim))
     }
 
     /// Flattens the input tensor on the dimension indexes from `start_dim` (inclusive) to the last
     /// dimension.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn flatten_from<D: Dim>(&self, start_dim: D) -> Result<Tensor> {
         self.flatten_(Some(start_dim), None::<usize>)
     }
@@ -2195,6 +2319,7 @@ impl Tensor {
     /// assert_eq!(tensor.to_vec1::<f32>()?, &[0., 1., 2., 3., 4., 5.]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn flatten_all(&self) -> Result<Tensor> {
         self.flatten_(None::<usize>, None::<usize>)
     }
@@ -2210,12 +2335,13 @@ impl Tensor {
     /// assert_eq!(t.to_vec1::<f32>()?, &[2., 3.]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn get(&self, i: usize) -> Result<Tensor> {
         let dims = self.dims();
         if dims.is_empty() {
             Ok(self.clone())
         } else {
-            self.narrow(0, i, 1)?.reshape(&dims[1..])
+            Ok(self.narrow(0, i, 1)?.reshape(&dims[1..])?)
         }
     }
 
@@ -2232,9 +2358,10 @@ impl Tensor {
     /// assert_eq!(t.to_vec1::<f32>()?, &[2., 3.]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn get_on_dim<D: Dim>(&self, dim: D, index: usize) -> Result<Tensor> {
         let dim = dim.to_index(self.shape(), "get_on_dim")?;
-        self.narrow(dim, index, 1)?.squeeze(dim)
+        Ok(self.narrow(dim, index, 1)?.squeeze(dim)?)
     }
 
     /// Returns a tensor that is a transposed version of the input, the two last dimensions of the
@@ -2247,6 +2374,7 @@ impl Tensor {
     /// assert_eq!(tensor.to_vec2::<f32>()?, &[[0.0, 2.0, 4.0], [1.0, 3.0, 5.0]]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn t(&self) -> Result<Tensor> {
         let rank = self.rank();
         if rank < 2 {
@@ -2262,6 +2390,7 @@ impl Tensor {
 
     /// Returns a tensor that is a transposed version of the input, the given dimensions are
     /// swapped.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn transpose<D1: Dim, D2: Dim>(&self, dim1: D1, dim2: D2) -> Result<Tensor> {
         let dim1 = dim1.to_index(self.shape(), "transpose")?;
         let dim2 = dim2.to_index(self.shape(), "transpose")?;
@@ -2292,6 +2421,7 @@ impl Tensor {
     /// assert_eq!(tensor.dims(), &[4, 5, 3, 2]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn permute<D: Dims>(&self, dims: D) -> Result<Tensor> {
         let dims = dims.to_indexes(self.shape(), "permute")?;
         // O(n^2) permutation check but these arrays are small.
@@ -2329,6 +2459,7 @@ impl Tensor {
 
     /// Compared to clone, this copies the actual storage but may fail because of running out of
     /// memory.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn copy(&self) -> Result<Tensor> {
         let op = BackpropOp::new1(self, Op::Copy);
         let tensor_ = Tensor_ {
@@ -2365,6 +2496,7 @@ impl Tensor {
     }
 
     /// If the target device is the same as the tensor device, only a shallow copy is performed.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_device(&self, device: &Device) -> Result<Tensor> {
         if self.device().same_device(device) {
             Ok(self.clone())
@@ -2409,6 +2541,7 @@ impl Tensor {
 
     /// Returns a new tensor duplicating data from the original tensor. New dimensions are inserted
     /// on the left.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn broadcast_left<S: Into<Shape>>(&self, left_shape: S) -> Result<Self> {
         let left_shape = left_shape.into();
         let mut dims = left_shape.into_dims();
@@ -2423,6 +2556,7 @@ impl Tensor {
     /// more and shape `j_1, ..., j_l, t_1, t_2, ..., t_k`. The dimensions `j_1` to `j_l` can have
     /// any value, the dimension `t_a` must be equal to `i_a` if `i_a` is different from 1. If
     /// `i_a` is equal to 1, any value can be used.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn broadcast_as<S: Into<Shape>>(&self, shape: S) -> Result<Self> {
         let tensor_ = Tensor_ {
             id: TensorId::new(),
@@ -2437,6 +2571,7 @@ impl Tensor {
     }
 
     /// An alias for broadcast_as.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn expand<S: Into<Shape>>(&self, shape: S) -> Result<Self> {
         self.broadcast_as(shape)
     }
@@ -2451,6 +2586,7 @@ impl Tensor {
     /// assert_eq!(tensor.to_scalar::<f32>()?, 3.1415927);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_dtype(&self, dtype: DType) -> Result<Self> {
         if self.dtype() == dtype {
             Ok(self.clone())
@@ -2464,6 +2600,7 @@ impl Tensor {
 
     /// Returns a tensor that is in row major order. This is the same as the original tensor if it
     /// was already contiguous, otherwise a copy is triggered.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn contiguous(&self) -> Result<Tensor> {
         if self.is_contiguous() {
             Ok(self.clone())
@@ -2478,6 +2615,7 @@ impl Tensor {
     }
 
     /// Returns a tensor that is in row major order. This always makes a copy.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn force_contiguous(&self) -> Result<Tensor> {
         let shape = self.shape();
         let mut storage = unsafe { self.device().alloc_uninit(shape, self.dtype())? };
@@ -2489,6 +2627,7 @@ impl Tensor {
 
     /// Create a variable based on the values currently stored in a tensor. The storage is always
     /// copied.
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn make_var(&self) -> Result<Tensor> {
         let shape = self.shape().clone();
         let mut storage = unsafe { self.device().alloc_uninit(&shape, self.dtype())? };
@@ -2521,6 +2660,7 @@ impl Tensor {
     ///
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn reshape<S: ShapeWithOneHole>(&self, s: S) -> Result<Tensor> {
         let shape = s.into_shape(self.elem_count())?;
         if shape.elem_count() != self.elem_count() {
@@ -2564,6 +2704,7 @@ impl Tensor {
     /// assert_eq!(c.shape().dims(), &[2, 3]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn squeeze<D: Dim>(&self, dim: D) -> Result<Self> {
         // The PyTorch semantics are to return the same tensor if the target dimension
         // does not have a size of 1.
@@ -2602,6 +2743,7 @@ impl Tensor {
     /// assert_eq!(c.shape().dims(), &[2, 3, 1]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn unsqueeze<D: Dim>(&self, dim: D) -> Result<Self> {
         let mut dims = self.dims().to_vec();
         let mut strides = self.stride().to_vec();
@@ -2640,6 +2782,7 @@ impl Tensor {
     /// assert_eq!(c.shape().dims(), &[2, 3, 2]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn stack<A: AsRef<Tensor>, D: Dim>(args: &[A], dim: D) -> Result<Self> {
         if args.is_empty() {
             Err(Error::OpRequiresAtLeastOneTensor { op: "stack" }.bt())?
@@ -2654,6 +2797,7 @@ impl Tensor {
 
     /// Pad the input tensor using 0s along dimension `dim`. This adds `left` elements before the
     /// input tensor values and `right` elements after.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn pad_with_zeros<D: Dim>(&self, dim: D, left: usize, right: usize) -> Result<Self> {
         if left == 0 && right == 0 {
             Ok(self.clone())
@@ -2662,13 +2806,13 @@ impl Tensor {
             let mut dims = self.dims().to_vec();
             dims[dim] = right;
             let right = Tensor::zeros(dims.as_slice(), self.dtype, self.device())?;
-            Tensor::cat(&[self, &right], dim)
+            Ok(Tensor::cat(&[self, &right], dim)?)
         } else if right == 0 {
             let dim = dim.to_index(self.shape(), "pad_with_zeros")?;
             let mut dims = self.dims().to_vec();
             dims[dim] = left;
             let left = Tensor::zeros(dims.as_slice(), self.dtype, self.device())?;
-            Tensor::cat(&[&left, self], dim)
+            Ok(Tensor::cat(&[&left, self], dim)?)
         } else {
             let dim = dim.to_index(self.shape(), "pad_with_zeros")?;
             let mut dims = self.dims().to_vec();
@@ -2676,12 +2820,13 @@ impl Tensor {
             let left = Tensor::zeros(dims.as_slice(), self.dtype, self.device())?;
             dims[dim] = right;
             let right = Tensor::zeros(dims.as_slice(), self.dtype, self.device())?;
-            Tensor::cat(&[&left, self, &right], dim)
+            Ok(Tensor::cat(&[&left, self, &right], dim)?)
         }
     }
 
     /// Pad the input tensor using same values along dimension `dim`. This adds `left` elements before the
     /// input tensor values and `right` elements after.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn pad_with_same<D: Dim>(&self, dim: D, left: usize, right: usize) -> Result<Self> {
         if left == 0 && right == 0 {
             Ok(self.clone())
@@ -2694,7 +2839,7 @@ impl Tensor {
             for _ in 0..right {
                 v.push(&r)
             }
-            Tensor::cat(&v, dim)
+            Ok(Tensor::cat(&v, dim)?)
         } else if right == 0 {
             let dim = dim.to_index(self.shape(), "pad_with_same")?;
             let l = self.narrow(dim, 0, 1)?;
@@ -2703,7 +2848,7 @@ impl Tensor {
                 v.push(&l)
             }
             v.push(self);
-            Tensor::cat(&v, dim)
+            Ok(Tensor::cat(&v, dim)?)
         } else {
             let dim = dim.to_index(self.shape(), "pad_with_same")?;
             let l = self.narrow(dim, 0, 1)?;
@@ -2716,16 +2861,18 @@ impl Tensor {
             for _ in 0..right {
                 v.push(&r)
             }
-            Tensor::cat(&v, dim)
+            Ok(Tensor::cat(&v, dim)?)
         }
     }
 
     /// Run the `forward` method of `m` on `self`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn apply<M: crate::Module>(&self, m: &M) -> Result<Self> {
         m.forward(self)
     }
 
     /// Run the `forward` method of `m` on `self`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn apply_t<M: crate::ModuleT>(&self, m: &M, train: bool) -> Result<Self> {
         m.forward_t(self, train)
     }
@@ -2761,6 +2908,7 @@ impl Tensor {
 
     /// Normalize a 'relative' axis value: positive values are kept, negative
     /// values means counting the dimensions from the back.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn normalize_axis(&self, axis: i64) -> Result<usize> {
         let rank = self.rank() as i64;
         if rank <= axis {
@@ -2777,33 +2925,37 @@ impl Tensor {
     }
 
     /// Returns a lower triangular matrix of ones of size n by n.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn tril2(n: usize, dtype: DType, device: &Device) -> Result<Self> {
         let t = Tensor::arange(0u32, n as u32, device)?;
         let t1 = t.reshape((1, n))?.broadcast_as((n, n))?;
         let t2 = t.reshape((n, 1))?.broadcast_as((n, n))?;
-        t1.le(&t2)?.to_dtype(dtype)
+        Ok(t1.le(&t2)?.to_dtype(dtype)?)
     }
 
     /// Returns an upper triangular matrix of ones of size n by n.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn triu2(n: usize, dtype: DType, device: &Device) -> Result<Self> {
         let t = Tensor::arange(0u32, n as u32, device)?;
         let t1 = t.reshape((1, n))?.broadcast_as((n, n))?;
         let t2 = t.reshape((n, 1))?.broadcast_as((n, n))?;
-        t1.ge(&t2)?.to_dtype(dtype)
+        Ok(t1.ge(&t2)?.to_dtype(dtype)?)
     }
 
     /// Returns a matrix with a diagonal of ones of size n by n.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn eye(n: usize, dtype: DType, device: &Device) -> Result<Self> {
         let t = Tensor::arange(0u32, n as u32, device)?;
         let t1 = t.reshape((1, n))?.broadcast_as((n, n))?;
         let t2 = t.reshape((n, 1))?.broadcast_as((n, n))?;
-        t1.eq(&t2)?.to_dtype(dtype)
+        Ok(t1.eq(&t2)?.to_dtype(dtype)?)
     }
 
     /// Returns the cumulative sum of elements of the input tensor summed over the specified
     /// dimension.
     ///
     /// This operation is most efficient when dim is the last dimension of the tensor.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn cumsum<D: Dim>(&self, dim: D) -> Result<Self> {
         let dim = dim.to_index(self.shape(), "cumsum")?;
         let rank = self.rank();
@@ -2813,17 +2965,18 @@ impl Tensor {
         let n_axis = self.dim(dim)?;
         let triu = Tensor::triu2(n_axis, self.dtype(), self.device())?;
         if rank == 1 {
-            self.unsqueeze(0)?.matmul(&triu)?.squeeze(0)
+            Ok(self.unsqueeze(0)?.matmul(&triu)?.squeeze(0)?)
         } else {
             let last = rank - 1;
             let t = self.transpose(dim, last)?;
             let t = t.broadcast_matmul(&triu)?;
-            t.transpose(dim, last)
+            Ok(t.transpose(dim, last)?)
         }
     }
 
     /// Returns a copy of `self` where the values within `ranges` have been replaced with the
     /// content of `src`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn slice_assign<D: std::ops::RangeBounds<usize>>(
         &self,
         ranges: &[D],
@@ -2879,6 +3032,7 @@ impl Tensor {
     }
 
     /// Returns log(sum(exp(tensor), dim)).
+    #[cfg_attr(feature = "iex", iex)]
     pub fn log_sum_exp<D: Dims>(&self, sum_dims: D) -> Result<Self> {
         let sum_dims = sum_dims.to_indexes(self.shape(), "log-sum-exp")?;
         if sum_dims.is_empty() {
@@ -2896,13 +3050,15 @@ impl Tensor {
     }
 
     /// Pointwise pow operation.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn pow(&self, rhs: &Tensor) -> Result<Self> {
-        rhs.mul(&self.log()?)?.exp()
+        Ok(rhs.mul(&self.log()?)?.exp()?)
     }
 
     /// Broadcasting version of `pow`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn broadcast_pow(&self, rhs: &Tensor) -> Result<Self> {
-        rhs.broadcast_mul(&self.log()?)?.exp()
+        Ok(rhs.broadcast_mul(&self.log()?)?.exp()?)
     }
 
     /// Returns a new tensor with the order of elements reversed along the specified dimensions.
@@ -2916,6 +3072,7 @@ impl Tensor {
     /// assert_eq!(t_flipped.to_vec2::<f64>()?, &[[3.0, 4.0, 5.0], [0.0, 1.0, 2.0]]);
     /// # Ok::<(), candle_core::Error>(())
     /// ```
+    #[cfg_attr(feature = "iex", iex)]
     pub fn flip(&self, dims: &[usize]) -> Result<Tensor> {
         let mut result = self.clone();
         for &dim in dims.iter() {
@@ -2929,6 +3086,7 @@ impl Tensor {
 
     /// Returns a view of which contains all slices of size `size` from self tensor in the dimension
     /// `dim` and stepped by `step`.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn unfold<D: Dim>(&self, dim: D, size: usize, step: usize) -> Result<Self> {
         // https://github.com/pytorch/pytorch/blob/75b0720a97ac5d82e8a7a1a6ae7c5f7a87d7183d/aten/src/ATen/native/TensorShape.cpp#L3785-L3804
         let mut sizes = self.dims().to_vec();
@@ -2976,6 +3134,7 @@ macro_rules! bin_trait {
         impl<B: std::borrow::Borrow<Tensor>> std::ops::$trait<B> for Tensor {
             type Output = Result<Tensor>;
 
+            #[cfg_attr(feature = "iex", iex)]
             fn $fn1(self, rhs: B) -> Self::Output {
                 Tensor::$fn1(&self, rhs.borrow())
             }
@@ -2984,6 +3143,7 @@ macro_rules! bin_trait {
         impl<B: std::borrow::Borrow<Tensor>> std::ops::$trait<B> for &Tensor {
             type Output = Result<Tensor>;
 
+            #[cfg_attr(feature = "iex", iex)]
             fn $fn1(self, rhs: B) -> Self::Output {
                 Tensor::$fn1(&self, rhs.borrow())
             }
@@ -2992,6 +3152,7 @@ macro_rules! bin_trait {
         impl<B: std::borrow::Borrow<Tensor>> std::ops::$trait<Tensor> for Result<B> {
             type Output = Result<Tensor>;
 
+            #[cfg_attr(feature = "iex", iex)]
             fn $fn1(self, rhs: Tensor) -> Self::Output {
                 Tensor::$fn1(self?.borrow(), &rhs)
             }
@@ -3000,6 +3161,7 @@ macro_rules! bin_trait {
         impl<B: std::borrow::Borrow<Tensor>> std::ops::$trait<&Tensor> for Result<B> {
             type Output = Result<Tensor>;
 
+            #[cfg_attr(feature = "iex", iex)]
             fn $fn1(self, rhs: &Tensor) -> Self::Output {
                 Tensor::$fn1(self?.borrow(), rhs)
             }
@@ -3008,6 +3170,7 @@ macro_rules! bin_trait {
         impl<B: std::borrow::Borrow<Tensor>> std::ops::$trait<Result<B>> for Tensor {
             type Output = Result<Tensor>;
 
+            #[cfg_attr(feature = "iex", iex)]
             fn $fn1(self, rhs: Result<B>) -> Self::Output {
                 Tensor::$fn1(&self, rhs?.borrow())
             }
@@ -3016,6 +3179,7 @@ macro_rules! bin_trait {
         impl<B: std::borrow::Borrow<Tensor>> std::ops::$trait<Result<B>> for &Tensor {
             type Output = Result<Tensor>;
 
+            #[cfg_attr(feature = "iex", iex)]
             fn $fn1(self, rhs: Result<B>) -> Self::Output {
                 Tensor::$fn1(&self, rhs?.borrow())
             }
@@ -3024,6 +3188,7 @@ macro_rules! bin_trait {
         impl std::ops::$trait<f64> for Tensor {
             type Output = Result<Tensor>;
 
+            #[cfg_attr(feature = "iex", iex)]
             fn $fn1(self, rhs: f64) -> Self::Output {
                 self.affine($mul(rhs), $add(rhs))
             }
@@ -3032,6 +3197,7 @@ macro_rules! bin_trait {
         impl std::ops::$trait<f64> for &Tensor {
             type Output = Result<Tensor>;
 
+            #[cfg_attr(feature = "iex", iex)]
             fn $fn1(self, rhs: f64) -> Self::Output {
                 self.affine($mul(rhs), $add(rhs))
             }
@@ -3047,6 +3213,7 @@ bin_trait!(Div, div, |v| 1. / v, |_| 0.);
 impl std::ops::Add<Tensor> for f64 {
     type Output = Result<Tensor>;
 
+    #[cfg_attr(feature = "iex", iex)]
     fn add(self, rhs: Tensor) -> Self::Output {
         rhs + self
     }
@@ -3055,6 +3222,7 @@ impl std::ops::Add<Tensor> for f64 {
 impl std::ops::Add<&Tensor> for f64 {
     type Output = Result<Tensor>;
 
+    #[cfg_attr(feature = "iex", iex)]
     fn add(self, rhs: &Tensor) -> Self::Output {
         rhs + self
     }
@@ -3063,6 +3231,7 @@ impl std::ops::Add<&Tensor> for f64 {
 impl std::ops::Mul<Tensor> for f64 {
     type Output = Result<Tensor>;
 
+    #[cfg_attr(feature = "iex", iex)]
     fn mul(self, rhs: Tensor) -> Self::Output {
         rhs * self
     }
@@ -3071,6 +3240,7 @@ impl std::ops::Mul<Tensor> for f64 {
 impl std::ops::Mul<&Tensor> for f64 {
     type Output = Result<Tensor>;
 
+    #[cfg_attr(feature = "iex", iex)]
     fn mul(self, rhs: &Tensor) -> Self::Output {
         rhs * self
     }
@@ -3079,6 +3249,7 @@ impl std::ops::Mul<&Tensor> for f64 {
 impl std::ops::Sub<Tensor> for f64 {
     type Output = Result<Tensor>;
 
+    #[cfg_attr(feature = "iex", iex)]
     fn sub(self, rhs: Tensor) -> Self::Output {
         rhs.affine(-1., self)
     }
@@ -3087,6 +3258,7 @@ impl std::ops::Sub<Tensor> for f64 {
 impl std::ops::Sub<&Tensor> for f64 {
     type Output = Result<Tensor>;
 
+    #[cfg_attr(feature = "iex", iex)]
     fn sub(self, rhs: &Tensor) -> Self::Output {
         rhs.affine(-1., self)
     }
@@ -3096,6 +3268,7 @@ impl std::ops::Div<Tensor> for f64 {
     type Output = Result<Tensor>;
 
     #[allow(clippy::suspicious_arithmetic_impl)]
+    #[cfg_attr(feature = "iex", iex)]
     fn div(self, rhs: Tensor) -> Self::Output {
         rhs.recip()? * self
     }
@@ -3105,6 +3278,7 @@ impl std::ops::Div<&Tensor> for f64 {
     type Output = Result<Tensor>;
 
     #[allow(clippy::suspicious_arithmetic_impl)]
+    #[cfg_attr(feature = "iex", iex)]
     fn div(self, rhs: &Tensor) -> Self::Output {
         rhs.recip()? * self
     }

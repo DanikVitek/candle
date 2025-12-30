@@ -1,10 +1,14 @@
 //! Support for the [GGUF file format](https://github.com/philpax/ggml/blob/gguf-spec/docs/gguf.md).
 //!
-//! Spec: https://github.com/ggml-org/ggml/blob/master/docs/gguf.md  
+//! Spec: https://github.com/ggml-org/ggml/blob/master/docs/gguf.md
 
 use super::{GgmlDType, QTensor};
 use crate::{Context, Device, Result};
+
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+#[cfg(feature = "iex")]
+use iex::iex;
+
 use std::collections::HashMap;
 
 pub const DEFAULT_ALIGNMENT: u64 = 32;
@@ -33,6 +37,7 @@ pub enum VersionedMagic {
 }
 
 impl VersionedMagic {
+    #[cfg_attr(feature = "iex", iex)]
     fn read<R: std::io::Read>(reader: &mut R) -> Result<Self> {
         let magic = reader.read_u32::<LittleEndian>()?;
         let magic = Magic::try_from(magic)?;
@@ -55,6 +60,7 @@ pub struct TensorInfo {
 }
 
 impl TensorInfo {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn read<R: std::io::Seek + std::io::Read>(
         &self,
         reader: &mut R,
@@ -89,6 +95,7 @@ pub struct Content {
     pub tensor_data_offset: u64,
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn read_string<R: std::io::Read>(reader: &mut R, magic: &VersionedMagic) -> Result<String> {
     let len = match magic {
         VersionedMagic::GgufV1 => reader.read_u32::<LittleEndian>()? as usize,
@@ -175,6 +182,7 @@ impl Value {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_u8(&self) -> Result<u8> {
         match self {
             Self::U8(v) => Ok(*v),
@@ -182,6 +190,7 @@ impl Value {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_i8(&self) -> Result<i8> {
         match self {
             Self::I8(v) => Ok(*v),
@@ -189,6 +198,7 @@ impl Value {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_u16(&self) -> Result<u16> {
         match self {
             Self::U16(v) => Ok(*v),
@@ -196,6 +206,7 @@ impl Value {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_i16(&self) -> Result<i16> {
         match self {
             Self::I16(v) => Ok(*v),
@@ -203,6 +214,7 @@ impl Value {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_u32(&self) -> Result<u32> {
         match self {
             Self::U32(v) => Ok(*v),
@@ -210,6 +222,7 @@ impl Value {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_i32(&self) -> Result<i32> {
         match self {
             Self::I32(v) => Ok(*v),
@@ -218,6 +231,7 @@ impl Value {
     }
 
     /// This will also automatically upcast any integral types which will not truncate.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_u64(&self) -> Result<u64> {
         match self {
             Self::U64(v) => Ok(*v),
@@ -230,6 +244,7 @@ impl Value {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_i64(&self) -> Result<i64> {
         match self {
             Self::I64(v) => Ok(*v),
@@ -237,6 +252,7 @@ impl Value {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_f32(&self) -> Result<f32> {
         match self {
             Self::F32(v) => Ok(*v),
@@ -244,6 +260,7 @@ impl Value {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_f64(&self) -> Result<f64> {
         match self {
             Self::F64(v) => Ok(*v),
@@ -251,6 +268,7 @@ impl Value {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_bool(&self) -> Result<bool> {
         match self {
             Self::Bool(v) => Ok(*v),
@@ -258,6 +276,7 @@ impl Value {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_vec(&self) -> Result<&Vec<Value>> {
         match self {
             Self::Array(v) => Ok(v),
@@ -265,6 +284,7 @@ impl Value {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn to_string(&self) -> Result<&String> {
         match self {
             Self::String(v) => Ok(v),
@@ -272,6 +292,7 @@ impl Value {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn read<R: std::io::Read>(
         reader: &mut R,
         value_type: ValueType,
@@ -313,6 +334,7 @@ impl Value {
         Ok(v)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn write<W: std::io::Write>(&self, w: &mut W) -> Result<()> {
         match self {
             &Self::U8(v) => w.write_u8(v)?,
@@ -353,6 +375,7 @@ impl Value {
 }
 
 impl ValueType {
+    #[cfg_attr(feature = "iex", iex)]
     fn from_u32(v: u32) -> Result<Self> {
         let v = match v {
             0 => Self::U8,
@@ -393,6 +416,7 @@ impl ValueType {
 }
 
 impl Content {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn read<R: std::io::Seek + std::io::Read>(reader: &mut R) -> Result<Self> {
         let magic = VersionedMagic::read(reader)?;
 
@@ -467,6 +491,7 @@ impl Content {
         })
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn tensor<R: std::io::Seek + std::io::Read>(
         &self,
         reader: &mut R,
@@ -481,6 +506,7 @@ impl Content {
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn write_string<W: std::io::Write>(w: &mut W, str: &str) -> Result<()> {
     let bytes = str.as_bytes();
     w.write_u64::<LittleEndian>(bytes.len() as u64)?;
@@ -488,6 +514,7 @@ fn write_string<W: std::io::Write>(w: &mut W, str: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(feature = "iex", iex)]
 pub fn write<W: std::io::Seek + std::io::Write>(
     w: &mut W,
     metadata: &[(&str, &Value)],

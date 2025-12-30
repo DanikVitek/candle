@@ -4,6 +4,9 @@ use crate::scalar::Scalar;
 use crate::{CpuStorage, CudaStorage, DType, Device, Error, Layout, MetalStorage, Result, Shape};
 use crate::{CustomOp1, CustomOp2, CustomOp3, InplaceOp1, InplaceOp2, InplaceOp3};
 
+#[cfg(feature = "iex")]
+use iex::iex;
+
 // We do not want to implement Clone on Storage as cloning may fail because of
 // out of memory. Instead try_clone should be used.
 #[derive(Debug)]
@@ -14,6 +17,7 @@ pub enum Storage {
 }
 
 impl Storage {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn try_clone(&self, layout: &Layout) -> Result<Self> {
         match self {
             Self::Cpu(storage) => Ok(Self::Cpu(storage.clone())),
@@ -44,6 +48,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn same_device(&self, rhs: &Self, op: &'static str) -> Result<()> {
         let lhs_device = self.device();
         let rhs_device = rhs.device();
@@ -64,6 +69,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn same_dtype(&self, rhs: &Self, op: &'static str) -> Result<()> {
         let lhs = self.dtype();
         let rhs = rhs.dtype();
@@ -74,6 +80,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn const_set(&mut self, v: Scalar, l: &Layout) -> Result<()> {
         match self {
             Storage::Cpu(storage) => storage.const_set(v, l),
@@ -82,6 +89,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn affine(&self, layout: &Layout, mul: f64, add: f64) -> Result<Self> {
         match self {
             Storage::Cpu(storage) => {
@@ -99,6 +107,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn powf(&self, layout: &Layout, alpha: f64) -> Result<Self> {
         match self {
             Storage::Cpu(storage) => {
@@ -116,6 +125,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn elu(&self, layout: &Layout, alpha: f64) -> Result<Self> {
         match self {
             Storage::Cpu(storage) => {
@@ -133,6 +143,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn cmp(
         &self,
         op: CmpOp,
@@ -168,6 +179,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn reduce_op(&self, op: ReduceOp, layout: &Layout, s: &[usize]) -> Result<Self> {
         match self {
             Storage::Cpu(storage) => {
@@ -185,6 +197,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn to_dtype(&self, layout: &Layout, dtype: DType) -> Result<Self> {
         match self {
             Storage::Cpu(storage) => {
@@ -202,6 +215,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn apply_op1(&self, l: &Layout, c: &dyn CustomOp1) -> Result<(Self, Shape)> {
         match self {
             Self::Cpu(storage) => {
@@ -219,6 +233,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn apply_op2(
         &self,
         l1: &Layout,
@@ -244,6 +259,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn apply_op3(
         &self,
         l1: &Layout,
@@ -272,6 +288,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn inplace_op1(&mut self, l: &Layout, c: &dyn InplaceOp1) -> Result<()> {
         match self {
             Self::Cpu(storage) => c.cpu_fwd(storage, l),
@@ -280,6 +297,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn inplace_op2(
         &mut self,
         l1: &Layout,
@@ -296,6 +314,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn inplace_op3(
         &mut self,
         l1: &Layout,
@@ -317,6 +336,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn unary_impl<B: op::UnaryOpT>(&self, layout: &Layout) -> Result<Self> {
         match self {
             Storage::Cpu(storage) => {
@@ -334,6 +354,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn binary_impl<B: op::BinaryOpT>(
         &self,
         rhs: &Self,
@@ -368,6 +389,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn conv1d(
         &self,
         l: &Layout,
@@ -399,6 +421,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn conv_transpose1d(
         &self,
         l: &Layout,
@@ -430,6 +453,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn conv2d(
         &self,
         l: &Layout,
@@ -461,6 +485,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn conv_transpose2d(
         &self,
         l: &Layout,
@@ -492,6 +517,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn avg_pool2d(
         &self,
         layout: &Layout,
@@ -514,6 +540,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn max_pool2d(
         &self,
         layout: &Layout,
@@ -536,6 +563,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn upsample_nearest1d(&self, layout: &Layout, sz: usize) -> Result<Self> {
         match self {
             Storage::Cpu(storage) => {
@@ -553,6 +581,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn upsample_nearest2d(&self, layout: &Layout, h: usize, w: usize) -> Result<Self> {
         match self {
             Storage::Cpu(storage) => {
@@ -570,6 +599,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn upsample_bilinear2d(
         &self,
         layout: &Layout,
@@ -598,6 +628,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn where_cond(
         &self,
         layout: &Layout,
@@ -631,6 +662,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn gather(
         &self,
         l: &Layout,
@@ -656,6 +688,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn scatter_set(
         &mut self,
         l: &Layout,
@@ -682,6 +715,7 @@ impl Storage {
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn scatter_add(
         &mut self,
         l: &Layout,
@@ -708,6 +742,7 @@ impl Storage {
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn index_add(
         &self,
         l: &Layout,
@@ -736,6 +771,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn index_select(
         &self,
         rhs: &Self,
@@ -766,6 +802,7 @@ impl Storage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn matmul(
         &self,
         rhs: &Self,
@@ -798,6 +835,7 @@ impl Storage {
     }
 
     // self, the source can be strided whereas dst is contiguous.
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn copy_strided_src(
         &self,
         dst: &mut Self,
@@ -820,6 +858,7 @@ impl Storage {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn copy2d(
         &self,
         dst: &mut Self,
@@ -831,7 +870,9 @@ impl Storage {
         dst_o: usize,
     ) -> Result<()> {
         match (self, dst) {
-            (Self::Cpu(src), Self::Cpu(dst)) => src.copy2d(dst, d1, d2, src_s, dst_s, src_o, dst_o),
+            (Self::Cpu(src), Self::Cpu(dst)) => {
+                Ok(src.copy2d(dst, d1, d2, src_s, dst_s, src_o, dst_o)?)
+            }
             (Self::Cuda(src), Self::Cuda(dst)) => {
                 Ok(src.copy2d(dst, d1, d2, src_s, dst_s, src_o, dst_o)?)
             }

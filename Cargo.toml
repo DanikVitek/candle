@@ -69,6 +69,7 @@ half = { version = "2.5.0", features = [
 ] }
 float8 = { version = "0.5.0", features = ["num-traits", "rand_distr"] }
 hound = "3.5.1"
+iex = "0.2.0"
 image = { version = "0.25.2", default-features = false, features = [
     "jpeg",
     "png",

@@ -2,6 +2,9 @@ use crate::backend::BackendDevice;
 use crate::cpu_backend::CpuDevice;
 use crate::{CpuStorage, DType, Result, Shape, Storage, WithDType};
 
+#[cfg(feature = "iex")]
+use iex::iex;
+
 /// A `DeviceLocation` represents a physical device whereas multiple `Device`
 /// can live on the same location (typically for cuda devices).
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -20,12 +23,14 @@ pub enum Device {
 }
 
 pub trait NdArray {
+    #[cfg_attr(feature = "iex", iex)]
     fn shape(&self) -> Result<Shape>;
 
     fn to_cpu_storage(&self) -> CpuStorage;
 }
 
 impl<S: WithDType> NdArray for S {
+    #[cfg_attr(feature = "iex", iex)]
     fn shape(&self) -> Result<Shape> {
         Ok(Shape::from(()))
     }
@@ -36,6 +41,7 @@ impl<S: WithDType> NdArray for S {
 }
 
 impl<S: WithDType, const N: usize> NdArray for &[S; N] {
+    #[cfg_attr(feature = "iex", iex)]
     fn shape(&self) -> Result<Shape> {
         Ok(Shape::from(self.len()))
     }
@@ -46,6 +52,7 @@ impl<S: WithDType, const N: usize> NdArray for &[S; N] {
 }
 
 impl<S: WithDType> NdArray for &[S] {
+    #[cfg_attr(feature = "iex", iex)]
     fn shape(&self) -> Result<Shape> {
         Ok(Shape::from(self.len()))
     }
@@ -56,6 +63,7 @@ impl<S: WithDType> NdArray for &[S] {
 }
 
 impl<S: WithDType, const N: usize, const M: usize> NdArray for &[[S; N]; M] {
+    #[cfg_attr(feature = "iex", iex)]
     fn shape(&self) -> Result<Shape> {
         Ok(Shape::from((M, N)))
     }
@@ -68,6 +76,7 @@ impl<S: WithDType, const N: usize, const M: usize> NdArray for &[[S; N]; M] {
 impl<S: WithDType, const N1: usize, const N2: usize, const N3: usize> NdArray
     for &[[[S; N3]; N2]; N1]
 {
+    #[cfg_attr(feature = "iex", iex)]
     fn shape(&self) -> Result<Shape> {
         Ok(Shape::from((N1, N2, N3)))
     }
@@ -86,6 +95,7 @@ impl<S: WithDType, const N1: usize, const N2: usize, const N3: usize> NdArray
 impl<S: WithDType, const N1: usize, const N2: usize, const N3: usize, const N4: usize> NdArray
     for &[[[[S; N4]; N3]; N2]; N1]
 {
+    #[cfg_attr(feature = "iex", iex)]
     fn shape(&self) -> Result<Shape> {
         Ok(Shape::from((N1, N2, N3, N4)))
     }
@@ -104,6 +114,7 @@ impl<S: WithDType, const N1: usize, const N2: usize, const N3: usize, const N4: 
 }
 
 impl<S: WithDType> NdArray for Vec<S> {
+    #[cfg_attr(feature = "iex", iex)]
     fn shape(&self) -> Result<Shape> {
         Ok(Shape::from(self.len()))
     }
@@ -114,6 +125,7 @@ impl<S: WithDType> NdArray for Vec<S> {
 }
 
 impl<S: WithDType> NdArray for Vec<&[S]> {
+    #[cfg_attr(feature = "iex", iex)]
     fn shape(&self) -> Result<Shape> {
         if self.is_empty() {
             crate::bail!("empty array")
@@ -135,6 +147,7 @@ impl<S: WithDType> NdArray for Vec<&[S]> {
 }
 
 impl<S: WithDType> NdArray for Vec<Vec<S>> {
+    #[cfg_attr(feature = "iex", iex)]
     fn shape(&self) -> Result<Shape> {
         if self.is_empty() {
             crate::bail!("empty array")
@@ -160,6 +173,7 @@ impl<S: WithDType> NdArray for Vec<Vec<S>> {
 }
 
 impl<S: WithDType> NdArray for Vec<Vec<Vec<S>>> {
+    #[cfg_attr(feature = "iex", iex)]
     fn shape(&self) -> Result<Shape> {
         if self.is_empty() {
             crate::bail!("empty array")
@@ -194,6 +208,7 @@ impl<S: WithDType> NdArray for Vec<Vec<Vec<S>>> {
 }
 
 impl<S: WithDType> NdArray for Vec<Vec<Vec<Vec<S>>>> {
+    #[cfg_attr(feature = "iex", iex)]
     fn shape(&self) -> Result<Shape> {
         if self.is_empty() {
             crate::bail!("empty array")
@@ -231,10 +246,12 @@ impl<S: WithDType> NdArray for Vec<Vec<Vec<Vec<S>>>> {
 }
 
 impl Device {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn new_cuda(ordinal: usize) -> Result<Self> {
         Ok(Self::Cuda(crate::CudaDevice::new(ordinal)?))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn as_cuda_device(&self) -> Result<&crate::CudaDevice> {
         match self {
             Self::Cuda(d) => Ok(d),
@@ -243,6 +260,7 @@ impl Device {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn as_metal_device(&self) -> Result<&crate::MetalDevice> {
         match self {
             Self::Cuda(_) => crate::bail!("expected a metal device, got cuda"),
@@ -251,14 +269,17 @@ impl Device {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn new_cuda_with_stream(ordinal: usize) -> Result<Self> {
         Ok(Self::Cuda(crate::CudaDevice::new_with_stream(ordinal)?))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn new_metal(ordinal: usize) -> Result<Self> {
         Ok(Self::Metal(crate::MetalDevice::new(ordinal)?))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn set_seed(&self, seed: u64) -> Result<()> {
         match self {
             Self::Cpu => CpuDevice.set_seed(seed),
@@ -267,6 +288,7 @@ impl Device {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn get_current_seed(&self) -> Result<u64> {
         match self {
             Self::Cpu => CpuDevice.get_current_seed(),
@@ -320,6 +342,7 @@ impl Device {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn cuda_if_available(ordinal: usize) -> Result<Self> {
         if crate::utils::cuda_is_available() {
             Self::new_cuda(ordinal)
@@ -328,6 +351,7 @@ impl Device {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn metal_if_available(ordinal: usize) -> Result<Self> {
         if crate::utils::metal_is_available() {
             Self::new_metal(ordinal)
@@ -336,6 +360,7 @@ impl Device {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn rand_uniform_f64(
         &self,
         lo: f64,
@@ -365,6 +390,7 @@ impl Device {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn rand_uniform<T: crate::FloatDType>(
         &self,
         lo: T,
@@ -374,6 +400,7 @@ impl Device {
         self.rand_uniform_f64(lo.to_f64(), up.to_f64(), shape, T::DTYPE)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn rand_normal_f64(
         &self,
         mean: f64,
@@ -403,6 +430,7 @@ impl Device {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn rand_normal<T: crate::FloatDType>(
         &self,
         mean: T,
@@ -412,6 +440,7 @@ impl Device {
         self.rand_normal_f64(mean.to_f64(), std.to_f64(), shape, T::DTYPE)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn zeros(&self, shape: &Shape, dtype: DType) -> Result<Storage> {
         match self {
             Device::Cpu => {
@@ -429,6 +458,7 @@ impl Device {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) unsafe fn alloc_uninit(&self, shape: &Shape, dtype: DType) -> Result<Storage> {
         match self {
             Device::Cpu => {
@@ -446,6 +476,7 @@ impl Device {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn storage_from_slice<D: WithDType>(&self, data: &[D]) -> Result<Storage> {
         match self {
             Device::Cpu => Ok(Storage::Cpu(data.to_cpu_storage())),
@@ -460,6 +491,7 @@ impl Device {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn storage<A: NdArray>(&self, array: A) -> Result<Storage> {
         match self {
             Device::Cpu => Ok(Storage::Cpu(array.to_cpu_storage())),
@@ -476,6 +508,7 @@ impl Device {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn storage_owned<S: WithDType>(&self, data: Vec<S>) -> Result<Storage> {
         match self {
             Device::Cpu => Ok(Storage::Cpu(S::to_cpu_storage_owned(data))),
@@ -492,6 +525,7 @@ impl Device {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn synchronize(&self) -> Result<()> {
         match self {
             Self::Cpu => Ok(()),

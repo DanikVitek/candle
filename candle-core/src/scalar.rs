@@ -1,8 +1,11 @@
 //! TensorScalar Enum and Trait
 //!
 use crate::{DType, Result, Tensor, WithDType};
+
 use float8::F8E4M3 as f8e4m3;
 use half::{bf16, f16};
+#[cfg(feature = "iex")]
+use iex::iex;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Scalar {
@@ -98,16 +101,19 @@ pub enum TensorScalar {
 }
 
 pub trait TensorOrScalar {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_tensor_scalar(self) -> Result<TensorScalar>;
 }
 
 impl TensorOrScalar for &Tensor {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_tensor_scalar(self) -> Result<TensorScalar> {
         Ok(TensorScalar::Tensor(self.clone()))
     }
 }
 
 impl<T: WithDType> TensorOrScalar for T {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_tensor_scalar(self) -> Result<TensorScalar> {
         let scalar = Tensor::new(self, &crate::Device::Cpu)?;
         Ok(TensorScalar::Scalar(scalar))

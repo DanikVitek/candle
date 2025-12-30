@@ -3,6 +3,9 @@
 use crate::backend::BackendStorage;
 use crate::{CpuStorage, CpuStorageRef, Error, Result};
 
+#[cfg(feature = "iex")]
+use iex::iex;
+
 /// The different types of elements allowed in tensors.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum DType {
@@ -166,7 +169,10 @@ pub trait WithDType:
         Self::to_cpu_storage_owned(data.to_vec())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn cpu_storage_as_slice(s: &CpuStorage) -> Result<&[Self]>;
+
+    #[cfg_attr(feature = "iex", iex)]
     fn cpu_storage_data(s: CpuStorage) -> Result<Vec<Self>>;
 }
 

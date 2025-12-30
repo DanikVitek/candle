@@ -2,7 +2,11 @@
 
 use super::{k_quants, GgmlDType, QStorage};
 use crate::{Device, Result};
+
 use byteorder::{LittleEndian, ReadBytesExt};
+#[cfg(feature = "iex")]
+use iex::iex;
+
 use std::collections::HashMap;
 
 // https://github.com/ggerganov/llama.cpp/blob/468ea24fb4633a0d681f7ac84089566c1c6190cb/llama.h#L37
@@ -40,6 +44,7 @@ pub enum VersionedMagic {
 }
 
 impl VersionedMagic {
+    #[cfg_attr(feature = "iex", iex)]
     fn read<R: std::io::Read>(reader: &mut R) -> Result<Self> {
         let magic = reader.read_u32::<LittleEndian>()?;
         let magic = Magic::try_from(magic)?;
@@ -77,6 +82,7 @@ pub struct HParams {
 }
 
 impl HParams {
+    #[cfg_attr(feature = "iex", iex)]
     fn read<R: std::io::Read>(reader: &mut R) -> Result<Self> {
         let n_vocab = reader.read_u32::<LittleEndian>()?;
         let n_embd = reader.read_u32::<LittleEndian>()?;
@@ -103,6 +109,7 @@ pub struct Vocab {
 }
 
 impl Vocab {
+    #[cfg_attr(feature = "iex", iex)]
     fn read<R: std::io::Read>(reader: &mut R, n_vocab: usize) -> Result<Self> {
         // https://github.com/ggerganov/llama.cpp/blob/468ea24fb4633a0d681f7ac84089566c1c6190cb/llama.cpp#L556
         let mut token_score_pairs = Vec::with_capacity(n_vocab);
@@ -117,6 +124,7 @@ impl Vocab {
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn from_raw_data<T: super::GgmlType + Send + Sync + 'static>(
     raw_data: &[u8],
     size_in_bytes: usize,
@@ -135,6 +143,7 @@ fn from_raw_data<T: super::GgmlType + Send + Sync + 'static>(
 }
 
 /// Creates a [Tensor] from a raw GGML tensor.
+#[cfg_attr(feature = "iex", iex)]
 pub fn qtensor_from_ggml(
     ggml_dtype: GgmlDType,
     raw_data: &[u8],
@@ -188,6 +197,7 @@ pub fn qtensor_from_ggml(
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn read_one_tensor<R: std::io::Seek + std::io::Read>(
     reader: &mut R,
     magic: VersionedMagic,
@@ -231,6 +241,7 @@ pub struct Content {
 }
 
 impl Content {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn read<R: std::io::Seek + std::io::Read>(
         reader: &mut R,
         device: &Device,
@@ -257,6 +268,7 @@ impl Content {
         })
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn remove(&mut self, name: &str) -> Result<super::QTensor> {
         match self.tensors.remove(name) {
             None => crate::bail!("cannot find tensor with name '{name}'"),

@@ -3,7 +3,10 @@
 //! This implementation should be in line with the [PyTorch version](https://github.com/pytorch/pytorch/blob/7b419e8513a024e172eae767e24ec1b849976b13/torch/_tensor_str.py).
 //!
 use crate::{DType, Result, Tensor, WithDType};
+
 use half::{bf16, f16};
+#[cfg(feature = "iex")]
+use iex::iex;
 
 impl Tensor {
     fn fmt_dt<T: WithDType + std::fmt::Display>(
@@ -307,6 +310,7 @@ impl<S> FloatFormatter<S>
 where
     S: WithDType + num_traits::Float + std::fmt::Display,
 {
+    #[cfg_attr(feature = "iex", iex)]
     fn new(t: &Tensor, po: &PrinterOptions) -> Result<Self> {
         let mut int_mode = true;
         let mut sci_mode = false;
@@ -418,6 +422,7 @@ where
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn get_summarized_data(t: &Tensor, edge_items: usize) -> Result<Tensor> {
     let dims = t.dims();
     if dims.is_empty() {

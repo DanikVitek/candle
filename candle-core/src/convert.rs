@@ -99,6 +99,7 @@ from_tensor!(u32);
 from_tensor!(u8);
 
 impl Tensor {
+    #[cfg_attr(feature = "iex", iex::iex)]
     pub fn write_bytes<W: std::io::Write>(&self, f: &mut W) -> crate::Result<()> {
         use byteorder::{LittleEndian, WriteBytesExt};
 

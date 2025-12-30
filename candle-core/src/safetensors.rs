@@ -13,8 +13,12 @@ use crate::op::BackpropOp;
 use crate::storage::Storage;
 use crate::tensor::from_storage;
 use crate::{DType, Device, Error, Result, Tensor, WithDType};
+
+#[cfg(feature = "iex")]
+use iex::iex;
 use safetensors::tensor as st;
 use safetensors::tensor::SafeTensors;
+
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::Path;
@@ -106,12 +110,14 @@ impl st::View for &Tensor {
 }
 
 impl Tensor {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn save_safetensors<P: AsRef<Path>>(&self, name: &str, filename: P) -> Result<()> {
         let data = [(name, self.clone())];
         Ok(st::serialize_to_file(data, None, filename.as_ref())?)
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn convert_slice<T: WithDType>(data: &[u8], shape: &[usize], device: &Device) -> Result<Tensor> {
     let size_in_bytes = T::DTYPE.size_in_bytes();
     let elem_count = data.len() / size_in_bytes;
@@ -137,6 +143,7 @@ fn convert_slice<T: WithDType>(data: &[u8], shape: &[usize], device: &Device) ->
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn convert_slice_with_cast<T: Sized + Copy, U: WithDType, F: Fn(T) -> Result<U>>(
     data: &[u8],
     shape: &[usize],
@@ -169,6 +176,7 @@ fn convert_slice_with_cast<T: Sized + Copy, U: WithDType, F: Fn(T) -> Result<U>>
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn convert_with_cast_<T: Sized + Copy, U: WithDType, F: Fn(T) -> Result<U>>(
     view: &st::TensorView<'_>,
     device: &Device,
@@ -177,6 +185,7 @@ fn convert_with_cast_<T: Sized + Copy, U: WithDType, F: Fn(T) -> Result<U>>(
     convert_slice_with_cast::<T, U, F>(view.data(), view.shape(), device, conv)
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn convert_<T: WithDType>(view: &st::TensorView<'_>, device: &Device) -> Result<Tensor> {
     convert_slice::<T>(view.data(), view.shape(), device)
 }
@@ -196,10 +205,12 @@ fn convert_back_<T: WithDType>(mut vs: Vec<T>) -> Vec<u8> {
 }
 
 pub trait Load {
+    #[cfg_attr(feature = "iex", iex)]
     fn load(&self, device: &Device) -> Result<Tensor>;
 }
 
 impl Load for st::TensorView<'_> {
+    #[cfg_attr(feature = "iex", iex)]
     fn load(&self, device: &Device) -> Result<Tensor> {
         convert(self, device)
     }
@@ -283,6 +294,7 @@ impl Tensor {
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn convert(view: &st::TensorView<'_>, device: &Device) -> Result<Tensor> {
     match view.dtype() {
         st::Dtype::U8 => convert_::<u8>(view, device),
@@ -309,6 +321,7 @@ fn convert(view: &st::TensorView<'_>, device: &Device) -> Result<Tensor> {
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn convert_dummy(view: &st::TensorView<'_>, device: &Device) -> Result<Tensor> {
     // For dummy types, we'll create the appropriate storage variant that preserves
     // both the raw data and the correct dtype
@@ -377,6 +390,7 @@ fn convert_dummy(view: &st::TensorView<'_>, device: &Device) -> Result<Tensor> {
     Ok(from_storage(storage, shape, op, false))
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn convert_back(tensor: &Tensor) -> Result<Vec<u8>> {
     // TODO: This makes an unnecessary copy when the tensor is on the cpu.
     let tensor = tensor.flatten_all()?;
@@ -397,11 +411,13 @@ fn convert_back(tensor: &Tensor) -> Result<Vec<u8>> {
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 pub fn load<P: AsRef<Path>>(filename: P, device: &Device) -> Result<HashMap<String, Tensor>> {
     let data = std::fs::read(filename.as_ref())?;
     load_buffer(&data[..], device)
 }
 
+#[cfg_attr(feature = "iex", iex)]
 pub fn load_buffer(data: &[u8], device: &Device) -> Result<HashMap<String, Tensor>> {
     let st = safetensors::SafeTensors::deserialize(data)?;
     st.tensors()
@@ -431,6 +447,7 @@ impl MmapedSafetensors {
     /// # Safety
     ///
     /// The unsafe is inherited from [`memmap2::MmapOptions`].
+    #[cfg_attr(feature = "iex", iex)]
     pub unsafe fn new<P: AsRef<Path>>(p: P) -> Result<Self> {
         let p = p.as_ref();
         let file = std::fs::File::open(p).map_err(|e| Error::from(e).with_path(p))?;
@@ -458,6 +475,7 @@ impl MmapedSafetensors {
     /// # Safety
     ///
     /// The unsafe is inherited from [`memmap2::MmapOptions`].
+    #[cfg_attr(feature = "iex", iex)]
     pub unsafe fn multi<P: AsRef<Path>>(paths: &[P]) -> Result<Self> {
         let mut routing = HashMap::new();
         let mut safetensors = vec![];
@@ -486,6 +504,7 @@ impl MmapedSafetensors {
         })
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn load(&self, name: &str, dev: &Device) -> Result<Tensor> {
         self.get(name)?.load(dev)
     }
@@ -498,6 +517,7 @@ impl MmapedSafetensors {
         tensors.into_iter().flatten().collect()
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn get(&self, name: &str) -> Result<st::TensorView<'_>> {
         let index = match &self.routing {
             None => 0,
@@ -521,11 +541,13 @@ pub struct SliceSafetensors<'a> {
 
 impl<'a> SliceSafetensors<'a> {
     /// Creates a wrapper around a binary buffer and deserialize the safetensors header.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn new(buffer: &'a [u8]) -> Result<Self> {
         let safetensors = safetensors::SafeTensors::deserialize(buffer)?;
         Ok(Self { safetensors })
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn load(&self, name: &str, dev: &Device) -> Result<Tensor> {
         self.safetensors.tensor(name)?.load(dev)
     }
@@ -534,6 +556,7 @@ impl<'a> SliceSafetensors<'a> {
         self.safetensors.tensors()
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn get(&self, name: &str) -> Result<st::TensorView<'_>> {
         Ok(self.safetensors.tensor(name)?)
     }
@@ -545,6 +568,7 @@ pub struct BufferedSafetensors {
 
 impl BufferedSafetensors {
     /// Creates a wrapper around a binary buffer and deserialize the safetensors header.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn new(buffer: Vec<u8>) -> Result<Self> {
         let safetensors = yoke::Yoke::<SafeTensors_<'static>, Vec<u8>>::try_attach_to_cart(
             buffer,
@@ -556,6 +580,7 @@ impl BufferedSafetensors {
         Ok(Self { safetensors })
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn load(&self, name: &str, dev: &Device) -> Result<Tensor> {
         self.get(name)?.load(dev)
     }
@@ -564,6 +589,7 @@ impl BufferedSafetensors {
         self.safetensors.get().0.tensors()
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn get(&self, name: &str) -> Result<st::TensorView<'_>> {
         Ok(self.safetensors.get().0.tensor(name)?)
     }
@@ -581,6 +607,7 @@ impl MmapedFile {
     /// # Safety
     ///
     /// The unsafe is inherited from [`memmap2::MmapOptions`].
+    #[cfg_attr(feature = "iex", iex)]
     pub unsafe fn new<P: AsRef<Path>>(p: P) -> Result<Self> {
         let p = p.as_ref();
         let file = std::fs::File::open(p).map_err(|e| Error::from(e).with_path(p))?;
@@ -593,6 +620,7 @@ impl MmapedFile {
         })
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn deserialize(&self) -> Result<SafeTensors<'_>> {
         let st = safetensors::SafeTensors::deserialize(&self.inner)
             .map_err(|e| Error::from(e).with_path(&self.path))?;

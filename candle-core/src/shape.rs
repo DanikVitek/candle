@@ -2,6 +2,9 @@
 #![allow(clippy::redundant_closure_call)]
 use crate::{Error, Result};
 
+#[cfg(feature = "iex")]
+use iex::iex;
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct Shape(Vec<usize>);
 
@@ -122,6 +125,7 @@ impl Shape {
     }
 
     /// The dimension size for a specified dimension index.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn dim<D: Dim>(&self, dim: D) -> Result<usize> {
         let dim = dim.to_index(self, "dim")?;
         Ok(self.dims()[dim])
@@ -188,6 +192,7 @@ impl Shape {
 
     /// Check whether the two shapes are compatible for broadcast, and if it is the case return the
     /// broadcasted shape. This is to be used for binary pointwise ops.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn broadcast_shape_binary_op(&self, rhs: &Self, op: &'static str) -> Result<Shape> {
         let lhs = self;
         let lhs_dims = lhs.dims();
@@ -226,6 +231,7 @@ impl Shape {
         Ok(Shape::from(bcast_dims))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub(crate) fn broadcast_shape_matmul(&self, rhs: &Self) -> Result<(Shape, Shape)> {
         let lhs = self;
         let lhs_dims = lhs.dims();
@@ -251,11 +257,14 @@ impl Shape {
 }
 
 pub trait Dim {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_index(&self, shape: &Shape, op: &'static str) -> Result<usize>;
+    #[cfg_attr(feature = "iex", iex)]
     fn to_index_plus_one(&self, shape: &Shape, op: &'static str) -> Result<usize>;
 }
 
 impl Dim for usize {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_index(&self, shape: &Shape, op: &'static str) -> Result<usize> {
         let dim = *self;
         if dim >= shape.dims().len() {
@@ -270,6 +279,7 @@ impl Dim for usize {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn to_index_plus_one(&self, shape: &Shape, op: &'static str) -> Result<usize> {
         let dim = *self;
         if dim > shape.dims().len() {
@@ -309,6 +319,7 @@ impl D {
 }
 
 impl Dim for D {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_index(&self, shape: &Shape, op: &'static str) -> Result<usize> {
         let rank = shape.rank();
         match self {
@@ -319,6 +330,7 @@ impl Dim for D {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn to_index_plus_one(&self, shape: &Shape, op: &'static str) -> Result<usize> {
         let rank = shape.rank();
         match self {
@@ -331,8 +343,10 @@ impl Dim for D {
 }
 
 pub trait Dims: Sized {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_indexes_internal(self, shape: &Shape, op: &'static str) -> Result<Vec<usize>>;
 
+    #[cfg_attr(feature = "iex", iex)]
     fn to_indexes(self, shape: &Shape, op: &'static str) -> Result<Vec<usize>> {
         let dims = self.to_indexes_internal(shape, op)?;
         for (i, &dim) in dims.iter().enumerate() {
@@ -358,30 +372,35 @@ pub trait Dims: Sized {
 }
 
 impl Dims for Vec<usize> {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_indexes_internal(self, _: &Shape, _: &'static str) -> Result<Vec<usize>> {
         Ok(self)
     }
 }
 
 impl<const N: usize> Dims for [usize; N] {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_indexes_internal(self, _: &Shape, _: &'static str) -> Result<Vec<usize>> {
         Ok(self.to_vec())
     }
 }
 
 impl Dims for &[usize] {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_indexes_internal(self, _: &Shape, _: &'static str) -> Result<Vec<usize>> {
         Ok(self.to_vec())
     }
 }
 
 impl Dims for () {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_indexes_internal(self, _: &Shape, _: &'static str) -> Result<Vec<usize>> {
         Ok(vec![])
     }
 }
 
 impl<D: Dim + Sized> Dims for D {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_indexes_internal(self, shape: &Shape, op: &'static str) -> Result<Vec<usize>> {
         let dim = self.to_index(shape, op)?;
         Ok(vec![dim])
@@ -389,6 +408,7 @@ impl<D: Dim + Sized> Dims for D {
 }
 
 impl<D: Dim> Dims for (D,) {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_indexes_internal(self, shape: &Shape, op: &'static str) -> Result<Vec<usize>> {
         let dim = self.0.to_index(shape, op)?;
         Ok(vec![dim])
@@ -396,6 +416,7 @@ impl<D: Dim> Dims for (D,) {
 }
 
 impl<D1: Dim, D2: Dim> Dims for (D1, D2) {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_indexes_internal(self, shape: &Shape, op: &'static str) -> Result<Vec<usize>> {
         let d0 = self.0.to_index(shape, op)?;
         let d1 = self.1.to_index(shape, op)?;
@@ -404,6 +425,7 @@ impl<D1: Dim, D2: Dim> Dims for (D1, D2) {
 }
 
 impl<D1: Dim, D2: Dim, D3: Dim> Dims for (D1, D2, D3) {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_indexes_internal(self, shape: &Shape, op: &'static str) -> Result<Vec<usize>> {
         let d0 = self.0.to_index(shape, op)?;
         let d1 = self.1.to_index(shape, op)?;
@@ -413,6 +435,7 @@ impl<D1: Dim, D2: Dim, D3: Dim> Dims for (D1, D2, D3) {
 }
 
 impl<D1: Dim, D2: Dim, D3: Dim, D4: Dim> Dims for (D1, D2, D3, D4) {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_indexes_internal(self, shape: &Shape, op: &'static str) -> Result<Vec<usize>> {
         let d0 = self.0.to_index(shape, op)?;
         let d1 = self.1.to_index(shape, op)?;
@@ -423,6 +446,7 @@ impl<D1: Dim, D2: Dim, D3: Dim, D4: Dim> Dims for (D1, D2, D3, D4) {
 }
 
 impl<D1: Dim, D2: Dim, D3: Dim, D4: Dim, D5: Dim> Dims for (D1, D2, D3, D4, D5) {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_indexes_internal(self, shape: &Shape, op: &'static str) -> Result<Vec<usize>> {
         let d0 = self.0.to_index(shape, op)?;
         let d1 = self.1.to_index(shape, op)?;
@@ -434,6 +458,7 @@ impl<D1: Dim, D2: Dim, D3: Dim, D4: Dim, D5: Dim> Dims for (D1, D2, D3, D4, D5) 
 }
 
 impl<D1: Dim, D2: Dim, D3: Dim, D4: Dim, D5: Dim, D6: Dim> Dims for (D1, D2, D3, D4, D5, D6) {
+    #[cfg_attr(feature = "iex", iex)]
     fn to_indexes_internal(self, shape: &Shape, op: &'static str) -> Result<Vec<usize>> {
         let d0 = self.0.to_index(shape, op)?;
         let d1 = self.1.to_index(shape, op)?;
@@ -468,21 +493,25 @@ extract_dims!(
 );
 
 pub trait ShapeWithOneHole {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape>;
 }
 
 impl<S: Into<Shape>> ShapeWithOneHole for S {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, _el_count: usize) -> Result<Shape> {
         Ok(self.into())
     }
 }
 
 impl ShapeWithOneHole for ((),) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         Ok(el_count.into())
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 fn hole_size(el_count: usize, prod_d: usize, s: &dyn std::fmt::Debug) -> Result<usize> {
     if prod_d == 0 {
         crate::bail!("cannot reshape tensor of {el_count} elements to {s:?}")
@@ -494,6 +523,7 @@ fn hole_size(el_count: usize, prod_d: usize, s: &dyn std::fmt::Debug) -> Result<
 }
 
 impl ShapeWithOneHole for ((), usize) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let ((), d1) = self;
         Ok((hole_size(el_count, d1, &self)?, d1).into())
@@ -501,6 +531,7 @@ impl ShapeWithOneHole for ((), usize) {
 }
 
 impl ShapeWithOneHole for (usize, ()) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let (d1, ()) = self;
         Ok((d1, hole_size(el_count, d1, &self)?).into())
@@ -508,6 +539,7 @@ impl ShapeWithOneHole for (usize, ()) {
 }
 
 impl ShapeWithOneHole for ((), usize, usize) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let ((), d1, d2) = self;
         Ok((hole_size(el_count, d1 * d2, &self)?, d1, d2).into())
@@ -515,6 +547,7 @@ impl ShapeWithOneHole for ((), usize, usize) {
 }
 
 impl ShapeWithOneHole for (usize, (), usize) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let (d1, (), d2) = self;
         Ok((d1, hole_size(el_count, d1 * d2, &self)?, d2).into())
@@ -522,6 +555,7 @@ impl ShapeWithOneHole for (usize, (), usize) {
 }
 
 impl ShapeWithOneHole for (usize, usize, ()) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let (d1, d2, ()) = self;
         Ok((d1, d2, hole_size(el_count, d1 * d2, &self)?).into())
@@ -529,6 +563,7 @@ impl ShapeWithOneHole for (usize, usize, ()) {
 }
 
 impl ShapeWithOneHole for ((), usize, usize, usize) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let ((), d1, d2, d3) = self;
         let d = hole_size(el_count, d1 * d2 * d3, &self)?;
@@ -537,6 +572,7 @@ impl ShapeWithOneHole for ((), usize, usize, usize) {
 }
 
 impl ShapeWithOneHole for (usize, (), usize, usize) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let (d1, (), d2, d3) = self;
         let d = hole_size(el_count, d1 * d2 * d3, &self)?;
@@ -545,6 +581,7 @@ impl ShapeWithOneHole for (usize, (), usize, usize) {
 }
 
 impl ShapeWithOneHole for (usize, usize, (), usize) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let (d1, d2, (), d3) = self;
         let d = hole_size(el_count, d1 * d2 * d3, &self)?;
@@ -553,6 +590,7 @@ impl ShapeWithOneHole for (usize, usize, (), usize) {
 }
 
 impl ShapeWithOneHole for (usize, usize, usize, ()) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let (d1, d2, d3, ()) = self;
         let d = hole_size(el_count, d1 * d2 * d3, &self)?;
@@ -561,6 +599,7 @@ impl ShapeWithOneHole for (usize, usize, usize, ()) {
 }
 
 impl ShapeWithOneHole for ((), usize, usize, usize, usize) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let ((), d1, d2, d3, d4) = self;
         let d = hole_size(el_count, d1 * d2 * d3 * d4, &self)?;
@@ -569,6 +608,7 @@ impl ShapeWithOneHole for ((), usize, usize, usize, usize) {
 }
 
 impl ShapeWithOneHole for (usize, (), usize, usize, usize) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let (d1, (), d2, d3, d4) = self;
         let d = hole_size(el_count, d1 * d2 * d3 * d4, &self)?;
@@ -577,6 +617,7 @@ impl ShapeWithOneHole for (usize, (), usize, usize, usize) {
 }
 
 impl ShapeWithOneHole for (usize, usize, (), usize, usize) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let (d1, d2, (), d3, d4) = self;
         let d = hole_size(el_count, d1 * d2 * d3 * d4, &self)?;
@@ -585,6 +626,7 @@ impl ShapeWithOneHole for (usize, usize, (), usize, usize) {
 }
 
 impl ShapeWithOneHole for (usize, usize, usize, (), usize) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let (d1, d2, d3, (), d4) = self;
         let d = hole_size(el_count, d1 * d2 * d3 * d4, &self)?;
@@ -593,6 +635,7 @@ impl ShapeWithOneHole for (usize, usize, usize, (), usize) {
 }
 
 impl ShapeWithOneHole for (usize, usize, usize, usize, ()) {
+    #[cfg_attr(feature = "iex", iex)]
     fn into_shape(self, el_count: usize) -> Result<Shape> {
         let (d1, d2, d3, d4, ()) = self;
         let d = hole_size(el_count, d1 * d2 * d3 * d4, &self)?;

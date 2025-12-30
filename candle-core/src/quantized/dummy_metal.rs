@@ -2,12 +2,16 @@
 use super::GgmlDType;
 use crate::{Error, MetalDevice, MetalStorage, Result};
 
+#[cfg(feature = "iex")]
+use iex::iex;
+
 pub struct QMetalStorage {
     dtype: GgmlDType,
     device: MetalDevice,
 }
 
 impl QMetalStorage {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn zeros(_: &MetalDevice, _: usize, _: GgmlDType) -> Result<Self> {
         Err(Error::NotCompiledWithMetalSupport)
     }
@@ -20,14 +24,17 @@ impl QMetalStorage {
         &self.device
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn dequantize(&self, _elem_count: usize) -> Result<MetalStorage> {
         Err(Error::NotCompiledWithMetalSupport)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn quantize(&mut self, _src: &MetalStorage) -> Result<()> {
         Err(Error::NotCompiledWithMetalSupport)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn quantize_imatrix(
         &mut self,
         _src: &MetalStorage,
@@ -37,6 +44,7 @@ impl QMetalStorage {
         Err(Error::NotCompiledWithMetalSupport)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn quantize_imatrix_onto(
         &mut self,
         _src: &crate::CpuStorage,
@@ -46,6 +54,7 @@ impl QMetalStorage {
         Err(Error::NotCompiledWithMetalSupport)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn quantize_onto(&mut self, _src: &crate::CpuStorage) -> Result<()> {
         Err(Error::NotCompiledWithCudaSupport)
     }
@@ -54,6 +63,7 @@ impl QMetalStorage {
         0
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn fwd(
         &self,
         _self_shape: &crate::Shape,
@@ -63,10 +73,12 @@ impl QMetalStorage {
         Err(Error::NotCompiledWithMetalSupport)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn data(&self) -> Result<Vec<u8>> {
         Err(Error::NotCompiledWithMetalSupport)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn indexed_moe_forward(
         &self,
         _: &crate::Shape,
@@ -79,6 +91,7 @@ impl QMetalStorage {
     }
 }
 
+#[cfg_attr(feature = "iex", iex)]
 pub fn load_quantized<T: super::GgmlType + Send + Sync + 'static>(
     _device: &MetalDevice,
     _data: &[T],

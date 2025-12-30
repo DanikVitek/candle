@@ -31,6 +31,7 @@ rand_distr = { workspace = true }
 rayon = { workspace = true }
 safetensors = { workspace = true }
 thiserror = { workspace = true }
+iex = { workspace = true, optional = true }
 yoke = { workspace = true }
 zip = { workspace = true }
 
@@ -43,7 +44,7 @@ clap = { workspace = true }
 criterion = { workspace = true }
 
 [features]
-default = []
+default = ["iex"] # FIXME: must be empty
 cuda = ["cudarc", "dep:candle-kernels", "candle-ug?/cuda", "float8/cuda"]
 cudnn = ["cuda", "cudarc/cudnn"]
 nccl = ["cuda", "cudarc/nccl"]

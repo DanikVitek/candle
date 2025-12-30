@@ -1,10 +1,15 @@
 //! Methods for backpropagation of gradients.
 use crate::op::{BinaryOp, Op, ReduceOp, UnaryOp};
 use crate::{Error, Result, Tensor, TensorId};
+
+#[cfg(feature = "iex")]
+use iex::iex;
+
 use std::collections::HashMap;
 
 // arg has been reduced to node via reduce_dims, expand it back to arg.
 // This has to handle keepdims.
+#[cfg_attr(feature = "iex", iex)]
 fn broadcast_back(arg: &Tensor, node: &Tensor, reduced_dims: &[usize]) -> Result<Tensor> {
     if arg.rank() == node.rank() {
         // keepdim = true
@@ -162,6 +167,7 @@ impl Tensor {
         nodes
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn backward(&self) -> Result<GradStore> {
         let sorted_nodes = self.sorted_nodes();
         let mut grads = GradStore::new();
@@ -765,6 +771,7 @@ impl GradStore {
 
     /// Get the gradient tensor associated with the given tensor, or, if it does not exist,
     /// insert a tensor of zeroes, with the same shape and type as the given tensors and return it
+    #[cfg_attr(feature = "iex", iex)]
     fn or_insert(&mut self, tensor: &Tensor) -> Result<&mut Tensor> {
         use std::collections::hash_map::Entry;
         let grad = match self.0.entry(tensor.id()) {

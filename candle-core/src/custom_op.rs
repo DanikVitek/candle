@@ -1,7 +1,11 @@
 use crate::op::{BackpropOp, Op};
 use crate::tensor::from_storage;
 use crate::{CpuStorage, CudaStorage, Layout, MetalStorage, Result, Shape, Tensor};
+
 use std::sync::Arc;
+
+#[cfg(feature = "iex")]
+use iex::iex;
 
 /// Unary ops that can be defined in user-land.
 pub trait CustomOp1 {
@@ -10,10 +14,12 @@ pub trait CustomOp1 {
 
     /// The forward pass, as run on a cpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn cpu_fwd(&self, storage: &CpuStorage, layout: &Layout) -> Result<(CpuStorage, Shape)>;
 
     /// The forward pass, as run on a gpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn cuda_fwd(&self, _storage: &CudaStorage, _layout: &Layout) -> Result<(CudaStorage, Shape)> {
         Err(crate::Error::Cuda(
             format!("no cuda implementation for {}", self.name()).into(),
@@ -22,6 +28,7 @@ pub trait CustomOp1 {
 
     /// The forward pass, as run on a metal gpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn metal_fwd(
         &self,
         _storage: &MetalStorage,
@@ -35,6 +42,7 @@ pub trait CustomOp1 {
     /// This function takes as argument the argument `arg` used in the forward pass, the result
     /// produced by the forward operation `res` and the gradient of the result `grad_res`.
     /// The function should return the gradient of the argument.
+    #[cfg_attr(feature = "iex", iex)]
     fn bwd(&self, _arg: &Tensor, _res: &Tensor, _grad_res: &Tensor) -> Result<Option<Tensor>> {
         Err(crate::Error::BackwardNotSupported { op: self.name() })
     }
@@ -45,6 +53,7 @@ pub trait CustomOp2 {
 
     /// The forward pass, as run on a cpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn cpu_fwd(
         &self,
         s1: &CpuStorage,
@@ -55,6 +64,7 @@ pub trait CustomOp2 {
 
     /// The forward pass, as run on a gpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn cuda_fwd(
         &self,
         _: &CudaStorage,
@@ -69,6 +79,7 @@ pub trait CustomOp2 {
 
     /// The forward pass, as run on a metal gpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn metal_fwd(
         &self,
         _: &MetalStorage,
@@ -81,6 +92,7 @@ pub trait CustomOp2 {
         ))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn bwd(
         &self,
         _arg1: &Tensor,
@@ -97,6 +109,7 @@ pub trait CustomOp3 {
 
     /// The forward pass, as run on a cpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn cpu_fwd(
         &self,
         s1: &CpuStorage,
@@ -109,6 +122,7 @@ pub trait CustomOp3 {
 
     /// The forward pass, as run on a gpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn cuda_fwd(
         &self,
         _: &CudaStorage,
@@ -125,6 +139,7 @@ pub trait CustomOp3 {
 
     /// The forward pass, as run on a metal gpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn metal_fwd(
         &self,
         _: &MetalStorage,
@@ -139,6 +154,7 @@ pub trait CustomOp3 {
         ))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn bwd(
         &self,
         _arg1: &Tensor,
@@ -153,12 +169,14 @@ pub trait CustomOp3 {
 
 impl Tensor {
     /// Applies a unary custom op without backward support
+    #[cfg_attr(feature = "iex", iex)]
     pub fn apply_op1_no_bwd<C: CustomOp1>(&self, c: &C) -> Result<Self> {
         let (storage, shape) = self.storage().apply_op1(self.layout(), c)?;
         Ok(from_storage(storage, shape, BackpropOp::none(), false))
     }
 
     /// Applies a binary custom op without backward support
+    #[cfg_attr(feature = "iex", iex)]
     pub fn apply_op2_no_bwd<C: CustomOp2>(&self, rhs: &Self, c: &C) -> Result<Self> {
         let (storage, shape) =
             self.storage()
@@ -167,6 +185,7 @@ impl Tensor {
     }
 
     /// Applies a ternary custom op without backward support
+    #[cfg_attr(feature = "iex", iex)]
     pub fn apply_op3_no_bwd<C: CustomOp3>(&self, t2: &Self, t3: &Self, c: &C) -> Result<Self> {
         let (storage, shape) = self.storage().apply_op3(
             self.layout(),
@@ -180,6 +199,7 @@ impl Tensor {
     }
 
     /// Applies a unary custom op.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn apply_op1_arc(&self, c: Arc<Box<dyn CustomOp1 + Send + Sync>>) -> Result<Self> {
         let (storage, shape) = self
             .storage()
@@ -188,11 +208,13 @@ impl Tensor {
         Ok(from_storage(storage, shape, op, false))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn apply_op1<C: 'static + CustomOp1 + Send + Sync>(&self, c: C) -> Result<Self> {
         self.apply_op1_arc(Arc::new(Box::new(c)))
     }
 
     /// Applies a binary custom op.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn apply_op2_arc(
         &self,
         rhs: &Self,
@@ -208,11 +230,13 @@ impl Tensor {
         Ok(from_storage(storage, shape, op, false))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn apply_op2<C: 'static + CustomOp2 + Send + Sync>(&self, r: &Self, c: C) -> Result<Self> {
         self.apply_op2_arc(r, Arc::new(Box::new(c)))
     }
 
     /// Applies a ternary custom op.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn apply_op3_arc(
         &self,
         t2: &Self,
@@ -233,6 +257,7 @@ impl Tensor {
         Ok(from_storage(storage, shape, op, false))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn apply_op3<C: 'static + CustomOp3 + Send + Sync>(
         &self,
         t2: &Self,
@@ -253,10 +278,12 @@ pub trait InplaceOp1 {
 
     /// The forward pass, as run on a cpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn cpu_fwd(&self, storage: &mut CpuStorage, layout: &Layout) -> Result<()>;
 
     /// The forward pass, as run on a gpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn cuda_fwd(&self, _storage: &mut CudaStorage, _layout: &Layout) -> Result<()> {
         Err(crate::Error::Cuda(
             format!("no cuda implementation for {}", self.name()).into(),
@@ -265,6 +292,7 @@ pub trait InplaceOp1 {
 
     /// The forward pass, as run on a metal gpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn metal_fwd(&self, _storage: &mut MetalStorage, _layout: &Layout) -> Result<()> {
         Err(crate::Error::Metal(
             format!("no metal implementation for {}", self.name()).into(),
@@ -277,11 +305,13 @@ pub trait InplaceOp2 {
 
     /// The forward pass, as run on a cpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn cpu_fwd(&self, s1: &mut CpuStorage, l1: &Layout, s2: &CpuStorage, l2: &Layout)
         -> Result<()>;
 
     /// The forward pass, as run on a gpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn cuda_fwd(&self, _: &mut CudaStorage, _: &Layout, _: &CudaStorage, _: &Layout) -> Result<()> {
         Err(crate::Error::Cuda(
             format!("no cuda implementation for {}", self.name()).into(),
@@ -290,6 +320,7 @@ pub trait InplaceOp2 {
 
     /// The forward pass, as run on a metal gpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn metal_fwd(
         &self,
         _: &mut MetalStorage,
@@ -308,6 +339,7 @@ pub trait InplaceOp3 {
 
     /// The forward pass, as run on a cpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn cpu_fwd(
         &self,
         s1: &mut CpuStorage,
@@ -320,6 +352,7 @@ pub trait InplaceOp3 {
 
     /// The forward pass, as run on a gpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn cuda_fwd(
         &self,
         _: &mut CudaStorage,
@@ -336,6 +369,7 @@ pub trait InplaceOp3 {
 
     /// The forward pass, as run on a metal gpu device. Note that the storage can use arbitrary strides,
     /// offsets etc so the associated layout should be used to access it.
+    #[cfg_attr(feature = "iex", iex)]
     fn metal_fwd(
         &self,
         _: &mut MetalStorage,
@@ -353,17 +387,20 @@ pub trait InplaceOp3 {
 
 impl Tensor {
     /// Applies a unary custom op in place.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn inplace_op1<C: InplaceOp1>(&self, c: &C) -> Result<()> {
         self.storage_mut().inplace_op1(self.layout(), c)
     }
 
     /// Applies a unary custom op in place (for the first tensor).
+    #[cfg_attr(feature = "iex", iex)]
     pub fn inplace_op2<C: InplaceOp2>(&self, rhs: &Self, c: &C) -> Result<()> {
         self.storage_mut()
             .inplace_op2(self.layout(), &rhs.storage(), rhs.layout(), c)
     }
 
     /// Applies a ternary custom op in place (for the first tensor).
+    #[cfg_attr(feature = "iex", iex)]
     pub fn inplace_op3<C: InplaceOp3>(&self, t2: &Self, t3: &Self, c: &C) -> Result<()> {
         self.storage_mut().inplace_op3(
             self.layout(),
@@ -389,6 +426,7 @@ pub struct UgIOp1 {
 impl UgIOp1 {
     #[allow(unused)]
     #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))]
+    #[cfg_attr(feature = "iex", iex)]
     pub fn new(
         name: &'static str,
         kernel: candle_ug::lang::ssa::Kernel,
@@ -422,11 +460,13 @@ impl InplaceOp1 for UgIOp1 {
         self.name
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn cpu_fwd(&self, _: &mut CpuStorage, _: &Layout) -> Result<()> {
         crate::bail!("ug ops are only supported on metal/cuda at the moment")
     }
 
     #[cfg(feature = "metal")]
+    #[cfg_attr(feature = "iex", iex)]
     fn metal_fwd(&self, sto: &mut MetalStorage, layout: &Layout) -> Result<()> {
         use crate::backend::BackendStorage;
         use objc2_metal;
@@ -459,6 +499,7 @@ impl InplaceOp1 for UgIOp1 {
     }
 
     #[cfg(feature = "cuda")]
+    #[cfg_attr(feature = "iex", iex)]
     fn cuda_fwd(&self, sto: &mut CudaStorage, layout: &Layout) -> Result<()> {
         use crate::cuda_backend::WrapErr;
         use cudarc::driver::PushKernelArg;

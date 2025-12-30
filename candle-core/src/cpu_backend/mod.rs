@@ -2,8 +2,11 @@
 use crate::backend::{BackendDevice, BackendStorage};
 use crate::op::{BinaryOpT, CmpOp, ReduceOp, UnaryOpT};
 use crate::{DType, Error, IntDType, Layout, Result, Shape, WithDType};
+
 use float8::F8E4M3;
 use half::{bf16, f16};
+#[cfg(feature = "iex")]
+use iex::iex;
 use rayon::prelude::*;
 
 mod utils;
@@ -62,7 +65,9 @@ pub struct CpuDevice;
 struct Cmp(CmpOp);
 impl Map2U8 for Cmp {
     const OP: &'static str = "cmp";
-    #[inline(always)]
+
+    #[cfg_attr(not(feature = "iex"), inline(always))]
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(
         &self,
         lhs: &[T],
@@ -86,7 +91,9 @@ struct WCond<'a, T: IntDType>(&'a [T], &'a Layout);
 
 impl<I: IntDType> Map2 for WCond<'_, I> {
     const OP: &'static str = "where";
-    #[inline(always)]
+
+    #[cfg_attr(not(feature = "iex"), inline(always))]
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, t: &[T], t_l: &Layout, f: &[T], f_l: &Layout) -> Result<Vec<T>> {
         let vs = match (
             self.1.contiguous_offsets(),
@@ -127,7 +134,8 @@ struct ReduceIndex {
 
 impl ReduceIndex {
     // The value gets replaced if f(s[current_acc], s[i]) returns true.
-    #[inline(always)]
+    #[cfg_attr(not(feature = "iex"), inline(always))]
+    #[cfg_attr(feature = "iex", iex)]
     fn fold_impl<T, U, F, G>(&self, src: &[T], src_l: &Layout, f: F, g: G) -> Result<Vec<U>>
     where
         T: Clone + Copy,
@@ -204,7 +212,8 @@ impl ReduceIndex {
 }
 
 impl Map1Any for ReduceIndex {
-    #[inline(always)]
+    #[cfg_attr(not(feature = "iex"), inline(always))]
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType, W: Fn(Vec<T>) -> CpuStorage>(
         &self,
         src: &[T],
@@ -235,7 +244,8 @@ struct ReduceSum<'a> {
 }
 
 impl ReduceSum<'_> {
-    #[inline(always)]
+    #[cfg_attr(not(feature = "iex"), inline(always))]
+    #[cfg_attr(feature = "iex", iex)]
     fn fold_impl<T>(&self, src: &[T], src_l: &Layout, start_elt: T) -> Result<Vec<T>>
     where
         T: WithDType,
@@ -300,7 +310,8 @@ impl ReduceSum<'_> {
 }
 
 impl Map1 for ReduceSum<'_> {
-    #[inline(always)]
+    #[cfg_attr(not(feature = "iex"), inline(always))]
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, src: &[T], src_l: &Layout) -> Result<Vec<T>> {
         self.fold_impl(src, src_l, T::zero())
     }
@@ -309,6 +320,7 @@ impl Map1 for ReduceSum<'_> {
 struct Affine(f64, f64);
 
 impl Map1 for Affine {
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, vs: &[T], layout: &Layout) -> Result<Vec<T>> {
         let mul = T::from_f64(self.0);
         let add = T::from_f64(self.1);
@@ -319,6 +331,7 @@ impl Map1 for Affine {
 struct AvgPool2D((usize, usize), (usize, usize));
 
 impl Map1 for AvgPool2D {
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, src: &[T], layout: &Layout) -> Result<Vec<T>> {
         // https://pytorch.org/docs/stable/generated/torch.nn.AvgPool2d.html
         let (k_h, k_w) = self.0;
@@ -360,6 +373,7 @@ impl Map1 for AvgPool2D {
 struct MaxPool2D((usize, usize), (usize, usize));
 
 impl Map1 for MaxPool2D {
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, src: &[T], layout: &Layout) -> Result<Vec<T>> {
         // https://pytorch.org/docs/stable/generated/torch.nn.MaxPool2d.html
         let (k_h, k_w) = self.0;
@@ -402,6 +416,7 @@ impl Map1 for MaxPool2D {
 struct UpsampleNearest1D(usize);
 
 impl Map1 for UpsampleNearest1D {
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, src: &[T], layout: &Layout) -> Result<Vec<T>> {
         // TODO: Specialized implementation for the case 2*sz?
         let dst_sz = self.0;
@@ -432,6 +447,7 @@ impl Map1 for UpsampleNearest1D {
 struct UpsampleNearest2D(usize, usize);
 
 impl Map1 for UpsampleNearest2D {
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, src: &[T], layout: &Layout) -> Result<Vec<T>> {
         // TODO: Specialized implementation for the case 2*h, 2*w?
         let (dst_h, dst_w) = (self.0, self.1);
@@ -475,6 +491,7 @@ struct UpsampleBilinear2D {
 }
 
 impl Map1 for UpsampleBilinear2D {
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, src: &[T], layout: &Layout) -> Result<Vec<T>> {
         let (batch, channels, height_in, width_in) = layout.shape().dims4()?;
         let height_out = self.target_h;
@@ -592,6 +609,7 @@ struct Gather<'a, I: IntDType> {
 }
 
 impl<I: IntDType> Map1 for Gather<'_, I> {
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, src: &[T], src_l: &Layout) -> Result<Vec<T>> {
         let ids = match self.ids_l.contiguous_offsets() {
             Some((a, b)) => &self.ids[a..b],
@@ -650,6 +668,7 @@ struct IndexSelect<'a, T: IntDType> {
 }
 
 impl<I: IntDType> Map1 for IndexSelect<'_, I> {
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, src: &[T], layout: &Layout) -> Result<Vec<T>> {
         let src = match layout.contiguous_offsets() {
             Some((a, b)) => &src[a..b],
@@ -810,6 +829,7 @@ impl<I: IntDType> Map2 for IndexAdd<'_, I> {
     const OP: &'static str = "index-add";
     // https://pytorch.org/docs/stable/generated/torch.Tensor.index_add_.html#torch.Tensor.index_add_
     // v1, l1 -> self
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, v1: &[T], l1: &Layout, src: &[T], src_l: &Layout) -> Result<Vec<T>> {
         let dst_len = l1.shape().elem_count();
         let mut dst = vec![T::zero(); dst_len];
@@ -934,6 +954,8 @@ struct Conv1D<'a>(&'a crate::conv::ParamsConv1D);
 
 impl Map2 for Conv1D<'_> {
     const OP: &'static str = "conv1d";
+
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, inp: &[T], inp_l: &Layout, k: &[T], k_l: &Layout) -> Result<Vec<T>> {
         let p = self.0;
         let inp = &inp[inp_l.start_offset()..];
@@ -1006,6 +1028,7 @@ impl Im2Col1D {
 }
 
 impl Map1 for Im2Col1D {
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, vs: &[T], layout: &Layout) -> Result<Vec<T>> {
         let &Self {
             l_k,
@@ -1068,6 +1091,7 @@ impl Im2Col {
 }
 
 impl Map1 for Im2Col {
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, vs: &[T], layout: &Layout) -> Result<Vec<T>> {
         let &Self {
             h_k,
@@ -1131,6 +1155,7 @@ struct Col2Im1D {
 }
 
 impl Map1 for Col2Im1D {
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, col: &[T], l: &Layout) -> Result<Vec<T>> {
         let (b_size, l_in, c_out, k_size) = l.shape().dims4()?;
         let stride = self.stride;
@@ -1158,6 +1183,8 @@ struct ConvTranspose1D<'a>(&'a crate::conv::ParamsConvTranspose1D);
 
 impl Map2 for ConvTranspose1D<'_> {
     const OP: &'static str = "conv_transpose1d";
+
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, inp: &[T], inp_l: &Layout, k: &[T], k_l: &Layout) -> Result<Vec<T>> {
         let p = self.0;
         let inp = &inp[inp_l.start_offset()..];
@@ -1227,6 +1254,8 @@ struct ConvTranspose2D<'a>(&'a crate::conv::ParamsConvTranspose2D);
 
 impl Map2 for ConvTranspose2D<'_> {
     const OP: &'static str = "conv_transpose2d";
+
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: WithDType>(&self, inp: &[T], inp_l: &Layout, k: &[T], k_l: &Layout) -> Result<Vec<T>> {
         let p = self.0;
         let inp = &inp[inp_l.start_offset()..];
@@ -1326,6 +1355,7 @@ impl MatMul {
         .bt()
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn ab_skip(&self, lhs_l: &Layout, rhs_l: &Layout) -> Result<(usize, usize)> {
         let lhs_stride = lhs_l.stride();
         let rhs_stride = rhs_l.stride();
@@ -1355,6 +1385,7 @@ impl Map2 for MatMul {
     const OP: &'static str = "mat_mul";
 
     #[cfg(all(not(feature = "mkl"), not(feature = "accelerate")))]
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: 'static + WithDType + num_traits::Num + Copy>(
         &self,
         lhs: &[T],
@@ -1438,6 +1469,7 @@ impl Map2 for MatMul {
     }
 
     #[cfg(feature = "accelerate")]
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: 'static + WithDType + num_traits::Num + Copy>(
         &self,
         lhs: &[T],
@@ -1529,6 +1561,7 @@ impl Map2 for MatMul {
     }
 
     #[cfg(feature = "mkl")]
+    #[cfg_attr(feature = "iex", iex)]
     fn f<T: 'static + WithDType + num_traits::Num + Copy>(
         &self,
         lhs: &[T],
@@ -1656,10 +1689,12 @@ fn elu<T: num_traits::Float>(v: T, alpha: T) -> T {
 }
 
 impl CpuStorage {
+    #[cfg_attr(feature = "iex", iex)]
     pub fn as_slice<D: WithDType>(&self) -> Result<&[D]> {
         D::cpu_storage_as_slice(self)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn concat(storages: &[CpuStorage]) -> Result<CpuStorage> {
         let storage0 = &storages[0];
         let s = match storage0 {
@@ -1844,6 +1879,7 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn to_dtype(&self, layout: &Layout, dtype: DType) -> Result<Self> {
         // TODO: find a way around the quadratic number of cases below.
         match (self, dtype) {
@@ -2266,6 +2302,7 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn reduce_op(&self, op: ReduceOp, layout: &Layout, reduce_dims: &[usize]) -> Result<Self> {
         match op {
             ReduceOp::Sum => {
@@ -2322,14 +2359,17 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn cmp(&self, op: CmpOp, rhs: &Self, lhs_l: &Layout, rhs_l: &Layout) -> Result<Self> {
         Cmp(op).map(self, lhs_l, rhs, rhs_l)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn affine(&self, layout: &Layout, mul: f64, add: f64) -> Result<Self> {
         Affine(mul, add).map(self, layout)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn avg_pool2d(
         &self,
         layout: &Layout,
@@ -2339,6 +2379,7 @@ impl BackendStorage for CpuStorage {
         AvgPool2D(kernel_size, stride).map(self, layout)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn max_pool2d(
         &self,
         layout: &Layout,
@@ -2348,14 +2389,17 @@ impl BackendStorage for CpuStorage {
         MaxPool2D(kernel_size, stride).map(self, layout)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn upsample_nearest1d(&self, layout: &Layout, sz: usize) -> Result<Self> {
         UpsampleNearest1D(sz).map(self, layout)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn upsample_nearest2d(&self, layout: &Layout, h: usize, w: usize) -> Result<Self> {
         UpsampleNearest2D(h, w).map(self, layout)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn upsample_bilinear2d(
         &self,
         layout: &Layout,
@@ -2375,6 +2419,7 @@ impl BackendStorage for CpuStorage {
         .map(self, layout)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn powf(&self, layout: &Layout, e: f64) -> Result<Self> {
         use num_traits::Float;
         // TODO: Have some generic map for functions that apply on num_traits::Float elements.
@@ -2411,6 +2456,7 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn elu(&self, layout: &Layout, alpha: f64) -> Result<Self> {
         // TODO: Have some generic map for functions that apply on num_traits::Float elements.
         match self {
@@ -2446,6 +2492,7 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn unary_impl<B: UnaryOpT>(&self, layout: &Layout) -> Result<Self> {
         match self {
             Self::BF16(storage) => {
@@ -2515,6 +2562,7 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn binary_impl<B: BinaryOpT>(
         &self,
         rhs: &Self,
@@ -2602,6 +2650,7 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn copy2d(
         &self,
         dst: &mut Self,
@@ -2663,6 +2712,7 @@ impl BackendStorage for CpuStorage {
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn copy_strided_src(&self, dst: &mut Self, dst_offset: usize, src_l: &Layout) -> Result<()> {
         match (self, dst) {
             (Self::U8(src), Self::U8(dst)) => copy_strided_src_(src, dst, dst_offset, src_l),
@@ -2700,6 +2750,7 @@ impl BackendStorage for CpuStorage {
         Ok(())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn where_cond(
         &self,
         layout: &Layout,
@@ -2718,6 +2769,7 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn conv1d(
         &self,
         l: &Layout,
@@ -2764,6 +2816,7 @@ impl BackendStorage for CpuStorage {
         Ok(res_t)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn conv_transpose1d(
         &self,
         l: &Layout,
@@ -2819,6 +2872,7 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn conv2d(
         &self,
         l: &Layout,
@@ -2829,6 +2883,7 @@ impl BackendStorage for CpuStorage {
         Conv2D(params).map(self, l, kernel, kernel_l)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn conv_transpose2d(
         &self,
         l: &Layout,
@@ -2839,6 +2894,7 @@ impl BackendStorage for CpuStorage {
         ConvTranspose2D(params).map(self, l, kernel, kernel_l)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn index_select(&self, ids: &Self, l: &Layout, ids_l: &Layout, dim: usize) -> Result<Self> {
         match ids {
             Self::U8(ids) => IndexSelect { ids, ids_l, dim }.map(self, l),
@@ -2848,6 +2904,7 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn gather(&self, l: &Layout, ids: &Self, ids_l: &Layout, dim: usize) -> Result<Self> {
         match ids {
             Self::U8(ids) => Gather { ids, ids_l, dim }.map(self, l),
@@ -2857,6 +2914,7 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn scatter_set(
         &mut self,
         l: &Layout,
@@ -2874,6 +2932,7 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn scatter_add_set(
         &mut self,
         l: &Layout,
@@ -2893,6 +2952,7 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn index_add(
         &self,
         l: &Layout,
@@ -2942,6 +3002,7 @@ impl BackendStorage for CpuStorage {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn matmul(
         &self,
         rhs: &Self,
@@ -2956,14 +3017,17 @@ impl BackendStorage for CpuStorage {
         &CpuDevice
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn try_clone(&self, _: &Layout) -> Result<Self> {
         Ok(self.clone())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn to_cpu_storage(&self) -> Result<CpuStorage> {
         Ok(self.clone())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn const_set(&mut self, s: crate::scalar::Scalar, l: &Layout) -> Result<()> {
         use crate::scalar::Scalar;
         fn set<T: crate::WithDType>(src: &mut [T], l: &Layout, s: T) {
@@ -3034,30 +3098,37 @@ impl BackendDevice for CpuDevice {
         true
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn storage_from_slice<T: crate::WithDType>(&self, s: &[T]) -> Result<Self::Storage> {
         Ok(T::to_cpu_storage(s))
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn storage_from_cpu_storage(&self, s: &CpuStorage) -> Result<Self::Storage> {
         Ok(s.clone())
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn storage_from_cpu_storage_owned(&self, s: CpuStorage) -> Result<Self::Storage> {
         Ok(s)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn new(_: usize) -> Result<Self> {
         Ok(Self)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn set_seed(&self, _seed: u64) -> Result<()> {
         crate::bail!("cannot seed the CPU rng with set_seed")
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn get_current_seed(&self) -> Result<u64> {
         crate::bail!("cannot get the CPU rng seed with get_current_seed")
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn rand_uniform(&self, shape: &Shape, dtype: DType, min: f64, max: f64) -> Result<CpuStorage> {
         use rand::prelude::*;
 
@@ -3121,6 +3192,7 @@ impl BackendDevice for CpuDevice {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn rand_normal(&self, shape: &Shape, dtype: DType, mean: f64, std: f64) -> Result<CpuStorage> {
         use rand::prelude::*;
 
@@ -3184,6 +3256,7 @@ impl BackendDevice for CpuDevice {
     }
 
     #[allow(clippy::uninit_vec)]
+    #[cfg_attr(feature = "iex", iex)]
     unsafe fn alloc_uninit(&self, shape: &Shape, dtype: DType) -> Result<CpuStorage> {
         let elem_count = shape.elem_count();
         // The code below is highly unsafe but hopefully not directly unsound as we only consider
@@ -3248,6 +3321,7 @@ impl BackendDevice for CpuDevice {
         Ok(storage)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn zeros_impl(&self, shape: &Shape, dtype: DType) -> Result<CpuStorage> {
         let elem_count = shape.elem_count();
         let storage = match dtype {
@@ -3268,6 +3342,7 @@ impl BackendDevice for CpuDevice {
         Ok(storage)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn synchronize(&self) -> Result<()> {
         Ok(())
     }

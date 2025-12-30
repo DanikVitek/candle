@@ -2,6 +2,9 @@
 //!
 use crate::{op::BackpropOp, op::Op, Error, Result, Tensor};
 
+#[cfg(feature = "iex")]
+use iex::iex;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParamsConv1D {
     pub(crate) b_size: usize,
@@ -129,6 +132,7 @@ impl ParamsConvTranspose2D {
 }
 
 impl Tensor {
+    #[cfg_attr(feature = "iex", iex)]
     fn conv1d_single_group(&self, kernel: &Self, params: &ParamsConv1D) -> Result<Self> {
         let storage =
             self.storage()
@@ -145,6 +149,7 @@ impl Tensor {
     }
 
     /// Applies a 1D convolution over the input tensor.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn conv1d(
         &self,
         kernel: &Self,
@@ -157,6 +162,7 @@ impl Tensor {
     }
 
     /// Applies a 1D convolution over the input tensor.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn conv1d_with_algo(
         &self,
         kernel: &Self,
@@ -190,20 +196,21 @@ impl Tensor {
             dilation,
             cudnn_fwd_algo,
         };
-        if groups == 1 {
-            self.conv1d_single_group(kernel, &params)
+        let result = if groups == 1 {
+            self.conv1d_single_group(kernel, &params)?
         } else {
             let blocks = self.chunk(groups, 1)?;
             let kernel = kernel.chunk(groups, 0)?;
-            let blocks = blocks
-                .iter()
-                .zip(&kernel)
-                .map(|(block, kernel)| block.conv1d_single_group(kernel, &params))
-                .collect::<Result<Vec<_>>>()?;
-            Tensor::cat(&blocks, 1)
-        }
+            let mut new_blocks = Vec::with_capacity(blocks.len());
+            for (block, kernel) in blocks.iter().zip(&kernel) {
+                new_blocks.push(block.conv1d_single_group(kernel, &params)?);
+            }
+            Tensor::cat(&new_blocks, 1)?
+        };
+        Ok(result)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn conv_transpose1d_single_group(
         &self,
         kernel: &Self,
@@ -228,6 +235,7 @@ impl Tensor {
     }
 
     /// Applies a 1D transposed convolution over the input tensor.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn conv_transpose1d(
         &self,
         kernel: &Self,
@@ -270,6 +278,7 @@ impl Tensor {
         }
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     fn conv2d_single_group(&self, kernel: &Self, params: &ParamsConv2D) -> Result<Self> {
         let storage =
             self.storage()
@@ -286,6 +295,7 @@ impl Tensor {
     }
 
     /// Applies a 2D convolution over the input tensor.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn conv2d(
         &self,
         kernel: &Self,
@@ -297,6 +307,7 @@ impl Tensor {
         self.conv2d_with_algo(kernel, padding, stride, dilation, groups, None)
     }
 
+    #[cfg_attr(feature = "iex", iex)]
     pub fn conv2d_with_algo(
         &self,
         kernel: &Self,
@@ -341,6 +352,7 @@ impl Tensor {
     }
 
     /// Applies a 2D transposed convolution over the input tensor.
+    #[cfg_attr(feature = "iex", iex)]
     pub fn conv_transpose2d(
         &self,
         kernel: &Self,
